@@ -1,0 +1,11 @@
+#!/bin/sh
+# binst shell setup (mimicking rustup env)
+# affix colons on either side of $PATH to simplify matching
+case ":${PATH}:" in
+    *:"$HOME/.binst/bin":*)
+        ;;
+    *)
+        # note - last or first. For now, we got with first.
+        export PATH="$HOME/.binst/bin:$PATH"
+        ;;
+esac
