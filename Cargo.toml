@@ -1,6 +1,6 @@
 [package]
 name = "binst"
-version = "0.0.0"
+version = "0.1.0-rc-1"
 authors = ["Jeremy Chone <jeremy.chone@gmail.com>"]
 edition = "2018"
 description = "binst's goal is to provide a simple way to publish and install Rust based binaries without the need of cargo-install and the complexity of OS dependent package managers"
@@ -16,11 +16,16 @@ categories = ["command-line-interface"]
 license = "MIT"
 
 [dependencies]
+tokio = {version = "1.5.0", features = ["full"]}
+reqwest = { version = "0.11" }
+anyhow = "1.0"
+rust-s3 = "0.27.0-rc4"
+platform-info = "0.1.0"
+os_info = { version = "3.0", default-features = false }
 dirs = "3.0"
 clap = "2.33.3"
 thiserror = "1.0"
-# serde_json = "1.0"
-# tar = "0.4"
-# walkdir = "2"
-# globwalk = "0.8.1"
-# libflate = "1"
+toml = "0.5"
+tar = "0.4"
+libflate = "1"
+regex = "1"
