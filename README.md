@@ -7,16 +7,11 @@ In short, supports publishing the release binary to a custom S3 via env and prof
 
 > Note - There other similar projects. Use what works for you. This one is under heavy development for now.
 
+> OS Support - For now, supports x64 mac and x64 linux gnu. Arm Mac / Linux coming soon. Windows, pull request welcome. 
 
 ## Install 
 
-On the development machine, **cargo install** (can install the binary way as well)
-
-```sh 
-cargo install binst
-```
-
-On the install machine, binary install
+Binary install on the development and install machines
 
 ```sh
 ## On linux 
@@ -32,6 +27,14 @@ curl -O https://binst.io/self/binst/x86_64-apple-darwin/v0.1.0-rc-1/binst.tar.gz
 ```
 
 > Note on AWS Linux - When using older instances, update openssl to 1.1 with `sudo yum install openssl11`. For now, we do not use `rustls`, and it requires `openssl1.1` (for the better).
+
+
+On the development machine, can use **cargo install** as well
+
+```sh 
+cargo install binst
+```
+
 
 
 ## CLI Examples
