@@ -11,28 +11,27 @@ In short, supports publishing the release binary to a custom S3 via env and prof
 ## Install 
 
 On the development machine, **cargo install** (can install the binary way as well)
+
 ```sh 
 cargo install binst
 ```
 
 On the install machine, binary install
+
 ```sh
-# download linux
-curl -O https://binst.io/self/binst/x86_64-unknown-linux-gnu/v0.1.0-rc-1/binst.tar.gz
-# download mac
-curl -O https://binst.io/self/binst/x86_64-apple-darwin/v0.1.0-rc-1/binst.tar.gz
+## On linux 
+curl -O https://binst.io/self/binst/x86_64-unknown-linux-gnu/v0.1.0-rc-1/binst.tar.gz && \
+  tar -xvf binst.tar.gz && ./binst self && \
+  echo 'source "$HOME/.binst/env"' >> ~/.bashrc && source "$HOME/.binst/env" 
 
-# untar
-tar -xvf binst.tar.gz
 
-# install self (will create and copy self to ~/.binst/...)
-./binst self
-
-# You can add the 'source "$HOME/.binst/env"' in your sh file
-#  1) On mac: echo '\nsource "$HOME/.binst/env"' >> ~/.zshenv
-#  2) On linux: echo 'source "$HOME/.binst/env"' >> ~/.bashrc
-# You can now delete the download binst file
+## On mac 
+curl -O https://binst.io/self/binst/x86_64-apple-darwin/v0.1.0-rc-1/binst.tar.gz && \
+  tar -xvf binst.tar.gz && ./binst self && \
+  echo '\nsource "$HOME/.binst/env"' >> ~/.zshenv && source "$HOME/.binst/env"
 ```
+
+> Note on AWS Linux - When using older instances, update openssl to 1.1 with `sudo yum install openssl11`. For now, we do not use `rustls`, and it requires `openssl1.1` (for the better).
 
 
 ## CLI Examples
