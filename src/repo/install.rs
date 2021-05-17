@@ -17,15 +17,15 @@ use super::{aws_provider::build_new_aws_bucket_client, BinRepo, BinRepoError, Ki
 
 // repo install method(s)
 impl BinRepo {
-	pub fn install(&self) -> Result<(), BinRepoError> {
+	pub async fn install(&self) -> Result<(), BinRepoError> {
 		// create the tempdir
 		let tmp_dir = make_bin_temp_dir(&self.bin_name)?;
 
 		//// download the package tar files to the folder
 		let (version, tmp_gz) = match &self.kind {
 			Kind::Local(local_repo_origin) => self.download_from_local(local_repo_origin, &tmp_dir)?,
-			Kind::S3(s3_info) => self.download_from_s3(s3_info, &tmp_dir)?,
-			Kind::Http(base_url) => self.download_from_http(base_url, &tmp_dir)?,
+			Kind::S3(s3_info) => self.download_from_s3(s3_info, &tmp_dir).await?,
+			Kind::Http(base_url) => self.download_from_http(base_url, &tmp_dir).await?,
 		};
 
 		//// copy the gz file
@@ -78,11 +78,48 @@ impl BinRepo {
 
 		Ok(())
 	}
+
+	pub async fn get_origin_info_toml_content(&self) -> Result<String, BinRepoError> {
+		let base_uri = self.origin_bin_target_uri();
+
+		let content = match &self.kind {
+			Kind::Local(local_repo_origin) => {
+				let origin_target_dir = Path::new(local_repo_origin).join(base_uri);
+				let origin_info_path = origin_target_dir.join("info.toml");
+				if !origin_info_path.is_file() {
+					return Err(BinRepoError::OriginInfoNotFound(origin_info_path.to_string_lossy().to_string()));
+				}
+				read_to_string(&origin_info_path)?
+			}
+			Kind::S3(s3_info) => {
+				let S3Info {
+					base,
+					profile,
+					bucket: bucket_name,
+				} = s3_info;
+				let bucket = build_new_aws_bucket_client(bucket_name, profile).await?;
+				let base_key = format!("{}/{}", base, self.origin_bin_target_uri());
+				let info_key = &format!("{}/info.toml", base_key);
+				let (data, _) = bucket.get_object(info_key).await?;
+				let data = std::str::from_utf8(&data).or_else(|_| Err(BinRepoError::InvalidInfoToml(info_key.to_owned())))?;
+
+				data.to_string()
+			}
+			Kind::Http(base_url) => {
+				let target_base_url = format!("{}/{}", base_url, self.origin_bin_target_uri());
+				let info_url = &format!("{}/info.toml", target_base_url);
+				let resp = reqwest::get(info_url).await?;
+				let data = resp.text().await?;
+				data
+			}
+		};
+
+		Ok(content)
+	}
 }
 
 // download from http
 impl BinRepo {
-	#[tokio::main]
 	async fn download_from_http(&self, http_base: &str, tmp_dir: &PathBuf) -> Result<(String, PathBuf), BinRepoError> {
 		let http_base = format!("{}/{}", http_base, self.origin_bin_target_uri());
 
@@ -108,7 +145,6 @@ impl BinRepo {
 
 // download from s3
 impl BinRepo {
-	#[tokio::main]
 	async fn download_from_s3(&self, s3_info: &S3Info, tmp_dir: &PathBuf) -> Result<(String, PathBuf), BinRepoError> {
 		let S3Info {
 			base,

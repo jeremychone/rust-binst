@@ -11,6 +11,7 @@ pub fn cmd_app() -> App<'static, 'static> {
 		.subcommand(sub_setup())
 		.subcommand(sub_publish())
 		.subcommand(sub_install())
+		.subcommand(sub_update())
 }
 
 // region:    Subcommands
@@ -27,9 +28,17 @@ fn sub_publish() -> App<'static, 'static> {
 
 fn sub_install() -> App<'static, 'static> {
 	SubCommand::with_name("install")
-		.about("install an binary package from ")
+		.about("install an binary package from a repo")
 		.arg(arg_repo())
-		.arg(Arg::with_name("bin_name").required(true).help("Name of the bing"))
+		.arg(Arg::with_name("bin_name").required(true).help("Name of the bin package"))
+		.arg(arg_profile())
+}
+
+fn sub_update() -> App<'static, 'static> {
+	SubCommand::with_name("update")
+		.about("update an already installed library")
+		.arg(arg_repo().required(false)) // turn off for update
+		.arg(Arg::with_name("bin_name").required(true).help("Name of the bin package"))
 		.arg(arg_profile())
 }
 // endregion: Subcommands
@@ -40,7 +49,7 @@ fn arg_repo() -> Arg<'static, 'static> {
 		.short("r")
 		.takes_value(true)
 		.required(true)
-		.help("The repo path (starts with . or / for local, otherwise, assume https:// domain/path ")
+		.help("The repo path e.g., s3://bucket_name/repo-base or https://mydomain.com/repo-base")
 }
 
 fn arg_profile() -> Arg<'static, 'static> {

@@ -156,7 +156,7 @@ fn parse_repo_uri(repo: &str, opts: RepoOpts) -> Result<Kind, BinRepoError> {
 	Ok(kind)
 }
 
-pub fn extract_opts(argv: &ArgMatches) -> RepoOpts {
+pub fn extract_opts_from_argc(argv: &ArgMatches) -> RepoOpts {
 	let profile = argv.value_of("profile").and_then(|f| Some(f.to_owned()));
 	RepoOpts { profile, ..Default::default() }
 }

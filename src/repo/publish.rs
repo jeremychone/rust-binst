@@ -25,7 +25,7 @@ struct UploadRec {
 
 // repo main publish method
 impl BinRepo {
-	pub fn publish(&self) -> Result<(), BinRepoError> {
+	pub async fn publish(&self) -> Result<(), BinRepoError> {
 		// create the temp dir
 		let tmp_dir = make_bin_temp_dir(&self.bin_name)?;
 
@@ -79,7 +79,7 @@ impl BinRepo {
 
 		match &self.kind {
 			Kind::Local(local_repo) => self.upload_to_local(local_repo, rec)?,
-			Kind::S3(s3_info) => self.upload_to_s3(s3_info, rec)?,
+			Kind::S3(s3_info) => self.upload_to_s3(s3_info, rec).await?,
 			Kind::Http(_) => return Err(BinRepoError::HttpProtocolNotSupportedForPublish),
 		};
 
@@ -124,7 +124,6 @@ impl BinRepo {
 
 // upload to s3
 impl BinRepo {
-	#[tokio::main]
 	async fn upload_to_s3(&self, s3_info: &S3Info, upload_rec: UploadRec) -> Result<(), BinRepoError> {
 		let bin_name = &self.bin_name;
 
