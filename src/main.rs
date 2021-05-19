@@ -1,4 +1,4 @@
-#![allow(unused)] // silence unused warnings while exploring (to comment out)
+// #![allow(unused)] // silence unused warnings while exploring (to comment out)
 
 mod app_error;
 mod argc;
@@ -15,9 +15,9 @@ use argc::cmd_app;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	match run() {
-		Ok(_) => println!("  ✔ All good and well"),
+		Ok(_) => println!("✔ All good and well"),
 		Err(e) => {
-			println!("ERROR CAUGHT - {:?}", e)
+			println!("Error:\n  {}", e)
 		}
 	};
 	Ok(())

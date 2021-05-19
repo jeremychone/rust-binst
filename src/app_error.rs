@@ -19,4 +19,7 @@ pub enum AppError {
 
 	#[error(transparent)]
 	ClapError(#[from] clap::Error),
+
+	#[error("Cargo.toml has an invalid semver version {0}")]
+	CargoInvalidVersion(String),
 }

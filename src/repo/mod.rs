@@ -14,6 +14,8 @@ use crate::{
 	utils::{sym_link, UtilsError},
 };
 use clap::ArgMatches;
+use regex::Regex;
+use semver::Version;
 use thiserror::Error;
 
 enum Kind {
@@ -41,6 +43,8 @@ pub struct BinRepo {
 pub struct RepoOpts {
 	profile: Option<String>,
 }
+
+pub const MAIN_STREAM: &str = "main";
 
 #[derive(Error, Debug)]
 pub enum BinRepoError {
@@ -72,8 +76,11 @@ pub enum BinRepoError {
 	#[error("Invalid {0}")]
 	InvalidInfoToml(String),
 
-	#[error("Origin info.toml not found")]
-	OriginInfoNotFound(String),
+	#[error("Invalid version from origin latest.toml")]
+	InvalidVersionFromOrigin,
+
+	#[error("Origin latest.toml not found. Might be wrong stream or package name. Not found {0}")]
+	OriginLatestNotFound(String),
 
 	#[error("The package .tar.gz file was not found at {0}")]
 	OriginTarGzNotFound(String),
@@ -112,9 +119,9 @@ impl BinRepo {
 		})
 	}
 
-	fn origin_bin_target_uri(&self) -> String {
+	fn origin_bin_target_uri(&self, stream_or_path: &str) -> String {
 		let target = os_target();
-		format!("{}/{}", self.bin_name, target)
+		format!("{}/{}/{}", self.bin_name, target, stream_or_path)
 	}
 }
 
@@ -177,9 +184,29 @@ fn get_release_bin(name: &str) -> Result<PathBuf, BinRepoError> {
 		false => Err(BinRepoError::NoReleaseBinFile),
 	}
 }
+
+pub fn extract_stream(version: &Version) -> String {
+	if version.pre.len() > 0 {
+		let pre = version.pre[0].to_string();
+		let rx = Regex::new("[a-zA-Z-]+").unwrap(); // can't fail if it worked once
+		let stream = rx.find(&pre).and_then(|m| Some(m.as_str())).unwrap_or("pre");
+		let stream = if stream.ends_with("-") { &stream[..stream.len() - 1] } else { stream };
+
+		stream.to_owned()
+	} else {
+		MAIN_STREAM.to_string()
+	}
+}
+
 // endregion: BinRepo path function helpers
 
 // region:    Self/Install/Update helpers
+
+//// Returns version path part.
+pub fn get_version_part(version: &Version) -> String {
+	format!("{}", version.to_string())
+}
+
 pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &PathBuf) -> Result<PathBuf, BinRepoError> {
 	// make sure the .binst/bin/ directory exists
 	let bin_dir = binst_bin_dir();
@@ -198,22 +225,44 @@ pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &PathBuf) -> Result<Path
 	Ok(bin_symlink_path)
 }
 
-pub fn create_install_toml(package_dir: &PathBuf, repo: &str, version: &str) -> Result<(), BinRepoError> {
-	let install_content = get_install_toml(repo, &version);
+pub fn create_install_toml(package_dir: &PathBuf, repo: &str, stream: &str, version: &Version) -> Result<(), BinRepoError> {
+	let install_content = create_install_toml_content(repo, stream, version);
 	let install_path = package_dir.join("install.toml");
 	File::create(&install_path)?.write_all(install_content.as_bytes())?;
 	Ok(())
 }
 
-fn get_install_toml(repo: &str, version: &str) -> String {
+fn create_install_toml_content(repo: &str, stream: &str, version: &Version) -> String {
 	format!(
-		r#"
-[install]		
-version = "{}"
+		r#"[install]		
 repo = "{}"
+stream = "{}"
+version = "{}"
 "#,
-		version, repo
+		repo, stream, version
 	)
 }
 
 // endregion: Self/Install/Update helpers
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_extract_stream() {
+		fn run(v: &str) -> String {
+			extract_stream(&Version::parse(v).unwrap())
+		}
+
+		assert_eq!("main", run("0.1.3"));
+		assert_eq!("main", run("0.1.0"));
+		assert_eq!("rc", run("0.1.3-rc"));
+		assert_eq!("rc", run("0.1.3-rc-1"));
+		assert_eq!("rc-big", run("0.1.3-rc-big-1"));
+		assert_eq!("beta", run("0.1.3-beta.2"));
+		assert_eq!("beta", run("0.1.3-beta2"));
+		assert_eq!("big-beta", run("0.1.3-big-beta2"));
+		assert_eq!("pre", run("0.1.3-123"));
+	}
+}

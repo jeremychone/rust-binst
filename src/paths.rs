@@ -2,6 +2,9 @@ use std::{fs::create_dir_all, path::PathBuf};
 
 use dirs::home_dir;
 use platform_info::{PlatformInfo, Uname};
+use semver::Version;
+
+use crate::repo::get_version_part;
 
 const BINST_DIR: &str = ".binst";
 // const BINST_CFG: &str = "config";
@@ -27,8 +30,8 @@ pub fn binst_tmp_dir(folder: Option<&str>) -> Result<PathBuf, std::io::Error> {
 	Ok(tmp_path)
 }
 
-pub fn binst_package_bin_dir(bin_name: &str, version: &str) -> Result<PathBuf, std::io::Error> {
-	let path = binst_dir().join("packages").join(bin_name).join(format!("v{}", version));
+pub fn binst_package_bin_dir(bin_name: &str, version: &Version) -> Result<PathBuf, std::io::Error> {
+	let path = binst_dir().join("packages").join(bin_name).join(get_version_part(&version));
 	if !path.is_dir() {
 		create_dir_all(&path)?;
 	}

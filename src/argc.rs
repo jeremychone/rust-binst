@@ -23,6 +23,7 @@ fn sub_publish() -> App<'static, 'static> {
 	SubCommand::with_name("publish")
 		.about("Publish the --release binary")
 		.arg(arg_repo())
+		.arg(arg_at_path())
 		.arg(arg_profile())
 }
 
@@ -31,13 +32,14 @@ fn sub_install() -> App<'static, 'static> {
 		.about("install an binary package from a repo")
 		.arg(arg_repo())
 		.arg(Arg::with_name("bin_name").required(true).help("Name of the bin package"))
+		.arg(arg_stream())
 		.arg(arg_profile())
 }
 
 fn sub_update() -> App<'static, 'static> {
 	SubCommand::with_name("update")
 		.about("update an already installed library")
-		.arg(arg_repo().required(false)) // turn off for update
+		.arg(arg_repo().required(false)) // turn off require for upteate
 		.arg(Arg::with_name("bin_name").required(true).help("Name of the bin package"))
 		.arg(arg_profile())
 }
@@ -52,7 +54,23 @@ fn arg_repo() -> Arg<'static, 'static> {
 		.help("The repo path e.g., s3://bucket_name/repo-base or https://mydomain.com/repo-base")
 }
 
+fn arg_at_path() -> Arg<'static, 'static> {
+	Arg::with_name("path")
+		.long("path")
+		.short("p")
+		.takes_value(true)
+		.help("Named path to publish/install (for fix 'version' path). Relative to the arch-target root.")
+}
+
 fn arg_profile() -> Arg<'static, 'static> {
-	Arg::with_name("profile").long("profile").short("p").takes_value(true).help("Path to profile")
+	Arg::with_name("profile").long("profile").takes_value(true).help("AWS Profile")
+}
+
+fn arg_stream() -> Arg<'static, 'static> {
+	Arg::with_name("stream")
+		.long("stream")
+		.short("s")
+		.takes_value(true)
+		.help("Release stream (default main)")
 }
 // endregion: Common Args
