@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::ArgMatches;
-use semver::{SemVerError, Version};
+use semver::Version;
 use thiserror::Error;
 use toml::Value;
 
@@ -51,7 +51,7 @@ pub enum ExecError {
 	TomlError(#[from] toml::de::Error),
 
 	#[error(transparent)]
-	SemVerError(#[from] SemVerError),
+	SemVerError(#[from] semver::Error),
 
 	#[error(transparent)]
 	UtilsError(#[from] UtilsError),
@@ -94,7 +94,7 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 	let origin_toml = repo.get_origin_latest_toml_content(&stream).await?;
 
 	let origin_toml: Value = toml::from_str(&origin_toml)?;
-	let origin_version = get_toml_value_as_string(&origin_toml, &["stable", "version"])?;
+	let origin_version = get_toml_value_as_string(&origin_toml, &["latest", "version"])?;
 	let origin_version = Version::parse(&origin_version)?;
 
 	println!("Updating {} from repo {}", &bin_name, &repo_raw);

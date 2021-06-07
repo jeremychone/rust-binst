@@ -9,11 +9,7 @@ use semver::Version;
 use tar::Builder;
 use toml::Value;
 
-use crate::{
-	exec::CARGO_TOML,
-	repo::{aws_provider::build_new_aws_bucket_client, extract_stream, get_version_part, Kind, S3Info},
-	utils::{clean_path, get_toml_value_as_string, safer_remove_dir},
-};
+use crate::{exec::CARGO_TOML, repo::{aws_provider::build_new_aws_bucket_client, extract_stream, get_version_part, Kind, S3Info}, utils::{clean_path, exec_cmd_args, get_toml_value_as_string, safer_remove_dir}};
 
 use super::{get_release_bin, make_bin_temp_dir, BinRepo, BinRepoError};
 
@@ -42,9 +38,10 @@ impl BinRepo {
 
 		let stream = extract_stream(&version);
 
-		println!("->> version {:?}", version);
-
 		println!("Publishing package: {}  |  version: {}  |  to: {}", bin_name, version, &self.repo_raw);
+
+		exec_cmd_args("cargo", &["build", "--release"])?;
+		// build the package
 
 		// get the release bin path
 		let bin_file = get_release_bin(bin_name)?;

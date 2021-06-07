@@ -1,4 +1,6 @@
 use std::os::unix::fs::symlink;
+use std::process::Command;
+use std::process::ExitStatus;
 use std::{fs::remove_dir_all, path::Path};
 
 use thiserror::Error;
@@ -6,6 +8,9 @@ use toml::Value;
 
 #[derive(Error, Debug)]
 pub enum UtilsError {
+	#[error("Fail to execute {0} cause: {1}")]
+	ExecError(String, String),
+
 	#[error("The toml value not found path {0}")]
 	TomlValueNotFound(String),
 
@@ -14,6 +19,17 @@ pub enum UtilsError {
 
 	#[error(transparent)]
 	IOError(#[from] std::io::Error),
+}
+
+impl UtilsError {
+	fn from_exec_stderr(cmd: &str, args: &[&str], cause: &dyn std::error::Error) -> Self {
+		let command = format!("{} {}", cmd, args.join(" "));
+		UtilsError::ExecError(command, cause.to_string())
+	}
+	fn from_exec_status(cmd: &str, args: &[&str], status: ExitStatus) -> Self {
+		let command = format!("{} {}", cmd, args.join(" "));
+		UtilsError::ExecError(command, status.to_string())
+	}
 }
 
 pub fn get_toml_value<'v>(root: &'v Value, arr: &[&str]) -> Result<&'v Value, UtilsError> {
@@ -59,6 +75,24 @@ pub fn clean_path(uri: &str) -> String {
 	}
 
 	uri.splitn(2, "://").map(cleaner).collect::<Vec<String>>().join("://")
+}
+
+pub fn exec_cmd_args(cmd: &str, args: &[&str]) -> Result<(), UtilsError> {
+	let mut proc = Command::new(cmd);
+	proc.args(args);
+
+	println!("> executing: {} {}", cmd, args.join(" "));
+
+	match proc.spawn()?.wait() {
+		Ok(status) => {
+			if !status.success() {
+				Err(UtilsError::from_exec_status(cmd, args, status))
+			} else {
+				Ok(())
+			}
+		}
+		Err(ex) => Err(UtilsError::from_exec_stderr(cmd, args, &ex)),
+	}
 }
 
 #[cfg(test)]

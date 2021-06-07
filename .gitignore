@@ -2,3 +2,6 @@
 !.gitignore
 
 target/
+
+
+*.gz

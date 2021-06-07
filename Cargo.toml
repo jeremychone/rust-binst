@@ -1,6 +1,6 @@
 [package]
 name = "binst"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Jeremy Chone <jeremy.chone@gmail.com>"]
 edition = "2018"
 description = "binst's goal is to provide a simple way to publish and install Rust based binaries without the need of cargo-install and the complexity of OS dependent package managers"
@@ -29,5 +29,5 @@ toml = "0.5"
 tar = "0.4"
 libflate = "1"
 regex = "1"
-semver = "0.11.0"
+semver = "1.0.3"
 url = "2"

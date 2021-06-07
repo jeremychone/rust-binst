@@ -187,7 +187,7 @@ fn get_release_bin(name: &str) -> Result<PathBuf, BinRepoError> {
 
 pub fn extract_stream(version: &Version) -> String {
 	if version.pre.len() > 0 {
-		let pre = version.pre[0].to_string();
+		let pre = version.pre.as_str();
 		let rx = Regex::new("[a-zA-Z-]+").unwrap(); // can't fail if it worked once
 		let stream = rx.find(&pre).and_then(|m| Some(m.as_str())).unwrap_or("pre");
 		let stream = if stream.ends_with("-") { &stream[..stream.len() - 1] } else { stream };
