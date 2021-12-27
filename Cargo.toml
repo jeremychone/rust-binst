@@ -21,7 +21,6 @@ reqwest = { version = "0.11" }
 anyhow = "1.0"
 rust-s3 = "0.27.0-rc4"
 platform-info = "0.1.0"
-os_info = { version = "3.0", default-features = false }
 dirs = "3.0"
 clap = "2.33.3"
 thiserror = "1.0"
@@ -31,3 +30,5 @@ libflate = "1"
 regex = "1"
 semver = "1.0.3"
 url = "2"
+## Not needed for now (using platform-info)
+# os_info = { version = "3.0", default-features = false }
