@@ -37,11 +37,7 @@ pub struct BinRepo {
 	bin_name: String,
 	kind: Kind,
 	repo_raw: String,
-}
-
-#[derive(Default)]
-pub struct RepoOpts {
-	profile: Option<String>,
+	target: Option<String>,
 }
 
 pub const MAIN_STREAM: &str = "main";
@@ -61,7 +57,9 @@ pub enum BinRepoError {
 	)]
 	S3CredMissingInEnvOrProfile,
 
-	#[error("No or missing credentials in environment variable. Must have (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION)")]
+	#[error(
+		"No or missing credentials in environment variable. Must have (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION)"
+	)]
 	S3CredMissingEnv,
 
 	#[error("Profile {0} not found or missing credentials")]
@@ -109,25 +107,25 @@ pub enum BinRepoError {
 
 // repo builder function(s) and common methods
 impl BinRepo {
-	pub fn new(bin_name: &str, repo: &str, opts: RepoOpts) -> Result<Self, BinRepoError> {
-		// FIXME: For now hardcode to jc-user pofile. Need to read from --profile
-		let kind = parse_repo_uri(repo, opts)?;
+	pub fn new(bin_name: &str, repo: &str, argv: &ArgMatches) -> Result<Self, BinRepoError> {
+		let profile = argv.value_of("profile").and_then(|f| Some(f.to_owned()));
+		let kind = parse_repo_uri(repo, profile)?;
+		let target = argv.value_of("target").map(|target| target.to_string());
 		Ok(BinRepo {
 			bin_name: bin_name.to_owned(),
 			kind,
 			repo_raw: repo.to_owned(),
+			target,
 		})
 	}
 
 	fn origin_bin_target_uri(&self, stream_or_path: &str) -> String {
-		let target = os_target();
+		let target = self.target.as_ref().map(|s| s.to_string()).unwrap_or(os_target());
 		format!("{}/{}/{}", self.bin_name, target, stream_or_path)
 	}
 }
 
-fn parse_repo_uri(repo: &str, opts: RepoOpts) -> Result<Kind, BinRepoError> {
-	let RepoOpts { profile } = opts;
-
+fn parse_repo_uri(repo: &str, profile: Option<String>) -> Result<Kind, BinRepoError> {
 	let kind = if repo.starts_with("s3://") {
 		let repo_path = &repo[5..];
 		let mut parts = repo_path.splitn(2, '/');
@@ -163,11 +161,6 @@ fn parse_repo_uri(repo: &str, opts: RepoOpts) -> Result<Kind, BinRepoError> {
 	Ok(kind)
 }
 
-pub fn extract_opts_from_argc(argv: &ArgMatches) -> RepoOpts {
-	let profile = argv.value_of("profile").and_then(|f| Some(f.to_owned()));
-	RepoOpts { profile, ..Default::default() }
-}
-
 // region:    BinRepo path function helpers
 fn make_bin_temp_dir(bin_name: &str) -> Result<PathBuf, BinRepoError> {
 	let start = SystemTime::now().duration_since(UNIX_EPOCH).expect("time anomaly?").as_millis();
@@ -176,9 +169,14 @@ fn make_bin_temp_dir(bin_name: &str) -> Result<PathBuf, BinRepoError> {
 	Ok(path)
 }
 
-fn get_release_bin(name: &str) -> Result<PathBuf, BinRepoError> {
-	// TODO: add support for Windows
-	let bin_file = Path::new("./target/release").join(name);
+fn get_release_bin(name: &str, target: &Option<String>) -> Result<PathBuf, BinRepoError> {
+	// Note this is to support cross compilation (x86_64-apple-darwin on arm64)
+	let bin_file = if let Some(target) = target {
+		Path::new("./target").join(target).join("release").join(name)
+	} else {
+		Path::new("./target/release").join(name)
+	};
+
 	match bin_file.is_file() {
 		true => Ok(bin_file),
 		false => Err(BinRepoError::NoReleaseBinFile),
@@ -190,7 +188,11 @@ pub fn extract_stream(version: &Version) -> String {
 		let pre = version.pre.as_str();
 		let rx = Regex::new("[a-zA-Z-]+").unwrap(); // can't fail if it worked once
 		let stream = rx.find(&pre).and_then(|m| Some(m.as_str())).unwrap_or("pre");
-		let stream = if stream.ends_with("-") { &stream[..stream.len() - 1] } else { stream };
+		let stream = if stream.ends_with("-") {
+			&stream[..stream.len() - 1]
+		} else {
+			stream
+		};
 
 		stream.to_owned()
 	} else {

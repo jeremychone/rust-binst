@@ -26,10 +26,10 @@ fn run() -> Result<(), AppError> {
 	let cmd = cmd_app().get_matches();
 
 	match cmd.subcommand() {
-		("self", Some(_)) => exec_setup()?,
-		("publish", Some(sub_cmd)) => exec_publish(sub_cmd)?,
-		("install", Some(sub_cmd)) => exec_install(sub_cmd)?,
-		("update", Some(sub_cmd)) => exec_update(sub_cmd)?,
+		Some(("self", _)) => exec_setup()?,
+		Some(("publish", sub_cmd)) => exec_publish(sub_cmd)?,
+		Some(("install", sub_cmd)) => exec_install(sub_cmd)?,
+		Some(("update", sub_cmd)) => exec_update(sub_cmd)?,
 		_ => {
 			// needs cmd_app version as the orginal got consumed by get_matches
 			cmd_app().print_long_help()?;

@@ -12,7 +12,7 @@ use toml::Value;
 
 use crate::{
 	paths::binst_bin_dir,
-	repo::{extract_opts_from_argc, BinRepo, BinRepoError, MAIN_STREAM},
+	repo::{BinRepo, BinRepoError, MAIN_STREAM},
 	utils::{clean_path, get_toml_value_as_string, UtilsError},
 };
 
@@ -61,7 +61,7 @@ pub enum ExecError {
 pub async fn exec_install(argc: &ArgMatches) -> Result<(), ExecError> {
 	let bin_name = argc.value_of("bin_name").ok_or(ExecError::NoBinName)?;
 	let repo_path = argc.value_of("repo").ok_or(ExecError::NoRepo)?;
-	let bin_repo = BinRepo::new(bin_name, repo_path, extract_opts_from_argc(argc))?;
+	let bin_repo = BinRepo::new(bin_name, repo_path, argc)?;
 
 	let stream = argc.value_of("stream").unwrap_or(MAIN_STREAM).to_owned();
 	Ok(bin_repo.install(stream).await?)
@@ -74,7 +74,7 @@ pub async fn exec_publish(argc: &ArgMatches) -> Result<(), ExecError> {
 	let toml: Value = toml::from_str(&toml)?;
 	let bin_name = get_toml_value_as_string(&toml, &["package", "name"])?;
 
-	let bin_repo = BinRepo::new(&bin_name, repo_path, extract_opts_from_argc(argc))?;
+	let bin_repo = BinRepo::new(&bin_name, repo_path, argc)?;
 	let at_path = argc.value_of("path").map(clean_path);
 
 	Ok(bin_repo.publish(at_path).await?)
@@ -90,7 +90,7 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 		version: installed_version,
 	} = extract_installed_bin_info(bin_name)?;
 
-	let repo = BinRepo::new(&bin_name, &repo_raw, extract_opts_from_argc(argc))?;
+	let repo = BinRepo::new(&bin_name, &repo_raw, argc)?;
 	let origin_toml = repo.get_origin_latest_toml_content(&stream).await?;
 
 	let origin_toml: Value = toml::from_str(&origin_toml)?;
@@ -100,7 +100,10 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 	println!("Updating {} from repo {}", &bin_name, &repo_raw);
 
 	if origin_version > installed_version {
-		println!("  Installing emote version {} ( > local version {})", origin_version, installed_version);
+		println!(
+			"  Installing emote version {} ( > local version {})",
+			origin_version, installed_version
+		);
 		repo.install(stream).await?;
 	} else {
 		println!(
@@ -138,7 +141,11 @@ fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecEr
 	// get the repo
 	let repo_raw = match get_toml_value_as_string(&install_toml, &["install", "repo"]) {
 		Ok(repo) => repo,
-		Err(_) => return Err(ExecError::NoRepoFoundInArgumentOrInInstallToml(install_toml_path.to_string_lossy().to_string())),
+		Err(_) => {
+			return Err(ExecError::NoRepoFoundInArgumentOrInInstallToml(
+				install_toml_path.to_string_lossy().to_string(),
+			))
+		}
 	};
 
 	Ok(InstalledBinInfo { version, stream, repo_raw })

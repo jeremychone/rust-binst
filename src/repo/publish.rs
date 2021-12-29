@@ -1,18 +1,17 @@
-use std::{
-	fs::{copy, create_dir, create_dir_all, read_to_string, write, File},
-	io::{BufReader, Read, Write},
-	path::{Path, PathBuf},
-};
-
+use crate::exec::CARGO_TOML;
+use crate::repo::{aws_provider::build_new_aws_bucket_client, extract_stream, get_version_part, Kind, S3Info};
+use crate::utils::{clean_path, exec_cmd_args, get_toml_value_as_string, safer_remove_dir};
 use libflate::gzip::Encoder;
 use semver::Version;
+use std::fs::{copy, create_dir, create_dir_all, read_to_string, write, File};
+use std::io::{BufReader, Read, Write};
+use std::path::{Path, PathBuf};
 use tar::Builder;
 use toml::Value;
 
-use crate::{exec::CARGO_TOML, repo::{aws_provider::build_new_aws_bucket_client, extract_stream, get_version_part, Kind, S3Info}, utils::{clean_path, exec_cmd_args, get_toml_value_as_string, safer_remove_dir}};
-
 use super::{get_release_bin, make_bin_temp_dir, BinRepo, BinRepoError};
 
+#[derive(Debug)]
 struct UploadRec {
 	latest_toml: PathBuf,
 	gz: PathBuf,
@@ -38,13 +37,21 @@ impl BinRepo {
 
 		let stream = extract_stream(&version);
 
-		println!("Publishing package: {}  |  version: {}  |  to: {}", bin_name, version, &self.repo_raw);
+		println!(
+			"Publishing package: {}  |  version: {}  |  to: {}",
+			bin_name, version, &self.repo_raw
+		);
 
-		exec_cmd_args("cargo", &["build", "--release"])?;
+		let mut build_args = vec!["build", "--release"];
+		if let Some(target) = &self.target {
+			build_args.push("--target");
+			build_args.push(target);
+		}
+		exec_cmd_args("cargo", &build_args)?;
 		// build the package
 
 		// get the release bin path
-		let bin_file = get_release_bin(bin_name)?;
+		let bin_file = get_release_bin(bin_name, &self.target)?;
 
 		// get the file to pack in the tmp_dir/to_pack folder
 		// TODO: support multiple files
@@ -188,7 +195,9 @@ impl BinRepo {
 			let mut latest_toml = File::open(&latest_toml)?;
 			let mut buffer = String::new();
 			latest_toml.read_to_string(&mut buffer)?;
-			bucket.put_object_with_content_type(&latest_key, buffer.as_bytes(), "text/plain").await?;
+			bucket
+				.put_object_with_content_type(&latest_key, buffer.as_bytes(), "text/plain")
+				.await?;
 			println!("  uploaded: s3:://{}/{}", bucket_name, latest_key);
 		}
 
@@ -213,7 +222,9 @@ impl BinRepo {
 		let mut package_toml = File::open(&package_toml_path)?;
 		let mut buffer = String::new();
 		package_toml.read_to_string(&mut buffer)?;
-		bucket.put_object_with_content_type(&package_key, buffer.as_bytes(), "text/plain").await?;
+		bucket
+			.put_object_with_content_type(&package_key, buffer.as_bytes(), "text/plain")
+			.await?;
 		println!("  uploaded: s3:://{}/{}", bucket_name, package_key);
 
 		Ok(())

@@ -68,3 +68,15 @@ pub fn os_target() -> String {
 
 	target
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn paths_os_target() -> Result<(), Box<dyn std::error::Error>> {
+		let target = os_target();
+		println!("current target {}", target);
+		Ok(())
+	}
+}
