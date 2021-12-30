@@ -1,24 +1,32 @@
-mod aws_provider;
-mod install;
-mod publish;
-
-use std::{
-	fs::{create_dir_all, remove_file, File},
-	io::Write,
-	path::{Path, PathBuf},
-	time::{SystemTime, UNIX_EPOCH},
-};
-
-use crate::{
-	paths::{binst_bin_dir, binst_tmp_dir, os_target},
-	utils::{sym_link, UtilsError},
-};
+use crate::paths::{binst_bin_dir, binst_tmp_dir, os_target};
+use crate::utils::{clean_path, sym_link};
 use clap::ArgMatches;
 use regex::Regex;
 use semver::Version;
-use thiserror::Error;
+use std::fs::{create_dir_all, remove_file, File};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-enum Kind {
+use self::error::BinRepoError;
+
+mod aws_provider;
+pub mod error;
+mod install;
+mod publish;
+
+pub const BINST_REPO_URL: &'static str = "https://repo.binst.io/";
+pub const BINST_REPO_BUCKET: &'static str = "binst-repo";
+pub const BINST_REPO_AWS_PROFILE: &'static str = "binst-repo-user";
+// env names for the binst repo
+pub const ENV_BINST_REPO_AWS_KEY_ID: &'static str = "BINST_REPO_AWS_KEY_ID";
+pub const ENV_BINST_REPO_AWS_KEY_SECRET: &'static str = "BINST_REPO_AWS_KEY_SECRET";
+pub const ENV_BINST_REPO_AWS_REGION: &'static str = "BINST_REPO_AWS_REGION";
+
+pub const MAIN_STREAM: &str = "main";
+
+#[derive(Debug)]
+enum RepoInfo {
 	// local path dir
 	Local(String),
 	// S3, only support via profile for now
@@ -27,94 +35,125 @@ enum Kind {
 	Http(String),
 }
 
-struct S3Info {
+impl RepoInfo {
+	fn url(&self) -> &str {
+		match self {
+			RepoInfo::Local(url) => url,
+			RepoInfo::S3(s3_info) => &s3_info.url,
+			RepoInfo::Http(url) => url,
+		}
+	}
+}
+
+/// Builders
+impl RepoInfo {
+	fn binst_publish_repo() -> RepoInfo {
+		let s3_info = S3Info {
+			url: format!("s3://{}", BINST_REPO_BUCKET),
+			bucket: BINST_REPO_BUCKET.to_string(),
+			base: "".to_string(),
+			profile: Some(BINST_REPO_AWS_PROFILE.to_string()),
+		};
+		RepoInfo::S3(s3_info)
+	}
+
+	fn binst_install_repo() -> RepoInfo {
+		RepoInfo::Http(clean_path(BINST_REPO_URL))
+	}
+
+	fn from_repo_string(repo: &str, profile: Option<&str>) -> Result<RepoInfo, BinRepoError> {
+		let repo_info = if repo.starts_with("s3://") {
+			RepoInfo::S3(S3Info::from_s3_url(repo, profile)?)
+		} else if repo.starts_with("http://") || repo.starts_with("https://") {
+			RepoInfo::Http(clean_path(repo))
+		} else {
+			RepoInfo::Local(clean_path(repo))
+		};
+
+		Ok(repo_info)
+	}
+}
+
+#[derive(Debug)]
+pub struct S3Info {
+	url: String,
 	bucket: String,
 	base: String,
 	profile: Option<String>,
 }
 
-pub struct BinRepo {
-	bin_name: String,
-	kind: Kind,
-	repo_raw: String,
-	target: Option<String>,
+impl S3Info {
+	pub fn from_s3_url(s3_url: &str, profile: Option<&str>) -> Result<S3Info, BinRepoError> {
+		let repo_path = &s3_url[5..];
+		let mut parts = repo_path.splitn(2, '/');
+		let bucket = match parts.next() {
+			Some(bucket) => {
+				if bucket.len() == 0 {
+					return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned()));
+				}
+				bucket
+			}
+			None => return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned())),
+		}
+		.to_owned();
+
+		let base = match parts.next() {
+			Some(base) => {
+				if base.starts_with("/") {
+					return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned()));
+				}
+				base
+			}
+			None => "", // empty string for empty base path
+		}
+		.to_owned();
+
+		let profile = profile.map(|v| v.to_owned());
+		let url = s3_url.to_string();
+
+		Ok(S3Info {
+			url,
+			bucket,
+			base,
+			profile,
+		})
+	}
 }
 
-pub const MAIN_STREAM: &str = "main";
-
-#[derive(Error, Debug)]
-pub enum BinRepoError {
-	#[error(
-		"Cannot access bucket bucket {0} with credential from {1} 
-   Check you have the right profile in .aws/config and credentials"
-	)]
-	RepoS3BucketNotAccessible(String, String),
-
-	#[error(
-		"Aws crendials not found in environment or profile. 
-  Make sure to set the (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION) 
-  or add a --profile your_profile"
-	)]
-	S3CredMissingInEnvOrProfile,
-
-	#[error(
-		"No or missing credentials in environment variable. Must have (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION)"
-	)]
-	S3CredMissingEnv,
-
-	#[error("Profile {0} not found or missing credentials")]
-	S3CredMissingProfile(String),
-
-	#[error("http protocols not supported for publish")]
-	HttpProtocolNotSupportedForPublish,
-
-	#[error("Invalid S3 repo url {0}")]
-	RepoInvalidS3(String),
-
-	#[error("Invalid {0}")]
-	InvalidInfoToml(String),
-
-	#[error("Invalid version from origin latest.toml")]
-	InvalidVersionFromOrigin,
-
-	#[error("Origin latest.toml not found. Might be wrong stream or package name. Not found {0}")]
-	OriginLatestNotFound(String),
-
-	#[error("The package .tar.gz file was not found at {0}")]
-	OriginTarGzNotFound(String),
-
-	#[error("The unpacked binary file not found at {0}")]
-	UnpackedBinFileNotFound(String),
-
-	#[error("No bin file found unser target/release. Make sure to do a cargo build --release")]
-	NoReleaseBinFile,
-
-	#[error(transparent)]
-	IOError(#[from] std::io::Error),
-
-	#[error(transparent)]
-	TomlError(#[from] toml::de::Error),
-
-	#[error(transparent)]
-	UtilsError(#[from] UtilsError),
-
-	#[error(transparent)]
-	ReqwestError(#[from] reqwest::Error),
-
-	#[error(transparent)]
-	AnyhowError(#[from] anyhow::Error),
+#[derive(Debug)]
+pub struct BinRepo {
+	bin_name: String,
+	install_repo: RepoInfo,
+	publish_repo: RepoInfo,
+	target: Option<String>,
 }
 
 // repo builder function(s) and common methods
 impl BinRepo {
-	pub fn new(bin_name: &str, repo: &str, argv: &ArgMatches) -> Result<Self, BinRepoError> {
-		let profile = argv.value_of("profile").and_then(|f| Some(f.to_owned()));
-		let kind = parse_repo_uri(repo, profile)?;
-		let target = argv.value_of("target").map(|target| target.to_string());
+	pub fn new(bin_name: &str, argc: &ArgMatches, publish: bool) -> Result<Self, BinRepoError> {
+		let bin_name = bin_name.to_string();
+
+		let target = if publish {
+			argc.value_of("target").map(|target| target.to_string())
+		} else {
+			None
+		};
+
+		// build the RepoInfo
+		let argc_profile = argc.value_of("profile");
+		let argc_repo = argc.value_of("repo");
+		let (install_repo, publish_repo) = if let Some(repo) = argc_repo {
+			let install_repo = RepoInfo::from_repo_string(repo, argc_profile)?;
+			let publish_repo = RepoInfo::from_repo_string(repo, argc_profile)?;
+			(install_repo, publish_repo)
+		} else {
+			(RepoInfo::binst_install_repo(), RepoInfo::binst_publish_repo())
+		};
+
 		Ok(BinRepo {
 			bin_name: bin_name.to_owned(),
-			kind,
-			repo_raw: repo.to_owned(),
+			install_repo,
+			publish_repo,
 			target,
 		})
 	}
@@ -123,42 +162,6 @@ impl BinRepo {
 		let target = self.target.as_ref().map(|s| s.to_string()).unwrap_or(os_target());
 		format!("{}/{}/{}", self.bin_name, target, stream_or_path)
 	}
-}
-
-fn parse_repo_uri(repo: &str, profile: Option<String>) -> Result<Kind, BinRepoError> {
-	let kind = if repo.starts_with("s3://") {
-		let repo_path = &repo[5..];
-		let mut parts = repo_path.splitn(2, '/');
-		let bucket = match parts.next() {
-			Some(bucket) => {
-				if bucket.len() == 0 {
-					return Err(BinRepoError::RepoInvalidS3(repo.to_owned()));
-				}
-				bucket
-			}
-			None => return Err(BinRepoError::RepoInvalidS3(repo.to_owned())),
-		}
-		.to_owned();
-
-		let base = match parts.next() {
-			Some(base) => {
-				if base.starts_with("/") {
-					return Err(BinRepoError::RepoInvalidS3(repo.to_owned()));
-				}
-				base
-			}
-			None => "", // empty string for empty base path
-		}
-		.to_owned();
-
-		Kind::S3(S3Info { bucket, base, profile })
-	} else if repo.starts_with("http://") || repo.starts_with("https://") {
-		Kind::Http(repo.to_owned())
-	} else {
-		Kind::Local(repo.to_owned())
-	};
-
-	Ok(kind)
 }
 
 // region:    BinRepo path function helpers

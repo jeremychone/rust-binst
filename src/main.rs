@@ -1,7 +1,6 @@
 // #![allow(unused)] // silence unused warnings while exploring (to comment out)
 
 mod app_error;
-mod argc;
 mod exec;
 mod paths;
 mod repo;
@@ -11,7 +10,7 @@ use app_error::AppError;
 use exec::{exec_install, exec_publish, exec_update};
 
 use crate::exec::setup::exec_setup;
-use argc::cmd_app;
+use exec::argc::cmd_app;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	match run() {

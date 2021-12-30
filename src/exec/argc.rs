@@ -51,7 +51,6 @@ fn arg_repo() -> Arg<'static> {
 	Arg::new("repo")
 		.short('r')
 		.takes_value(true)
-		.required(true)
 		.help("The repo path e.g., s3://bucket_name/repo-base or https://mydomain.com/repo-base")
 }
 

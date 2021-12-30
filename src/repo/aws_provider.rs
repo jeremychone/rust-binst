@@ -1,7 +1,7 @@
 ///////
 // Utilities for Aws S3 resources
 
-use super::BinRepoError;
+use super::{BinRepoError, BINST_REPO_BUCKET, ENV_BINST_REPO_AWS_KEY_ID, ENV_BINST_REPO_AWS_KEY_SECRET, ENV_BINST_REPO_AWS_REGION};
 use dirs::home_dir;
 use regex::Regex;
 use s3::{creds::Credentials, Bucket, Region};
@@ -25,14 +25,23 @@ struct AwsCred {
 }
 
 pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<String>) -> Result<Bucket, BinRepoError> {
-	let aws_cred = match profile {
-		Some(profile) => extract_aws_cred_from_profile(profile),
-		None => extract_aws_cred_from_env(),
+	let mut aws_cred = if bucket_name == BINST_REPO_BUCKET {
+		extract_aws_cred_from_env(ENV_BINST_REPO_AWS_KEY_ID, ENV_BINST_REPO_AWS_KEY_SECRET, ENV_BINST_REPO_AWS_REGION)
+	} else {
+		None
 	};
 
+	// if still none, try to get it from the profile or the default aws environment
+	if aws_cred.is_none() {
+		aws_cred = match profile {
+			Some(profile) => extract_aws_cred_from_profile(profile).ok(),
+			None => extract_aws_cred_from_env(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION),
+		};
+	}
+
 	let aws_cred = match aws_cred {
-		Ok(aws_cred) => aws_cred,
-		Err(_) => return Err(BinRepoError::S3CredMissingInEnvOrProfile),
+		Some(aws_cred) => aws_cred,
+		None => return Err(BinRepoError::S3CredMissingInEnvOrProfile),
 	};
 
 	let credentials = Credentials::new(Some(&aws_cred.id), Some(&aws_cred.secret), None, None, None).unwrap();
@@ -55,17 +64,18 @@ pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<Str
 // region:    Extract AWS Credentials
 
 // endregion: Extract AWS Credentials
-fn extract_aws_cred_from_env() -> Result<AwsCred, BinRepoError> {
+fn extract_aws_cred_from_env(aws_key_id: &str, aws_key_secret: &str, aws_region: &str) -> Option<AwsCred> {
 	// Note: style experimentation
-	fn env() -> Result<AwsCred, VarError> {
-		let id = env::var(AWS_ACCESS_KEY_ID)?;
-		let secret = env::var(AWS_SECRET_ACCESS_KEY)?;
-		let region = env::var(AWS_DEFAULT_REGION)?;
-		Ok(AwsCred { id, secret, region })
-	}
+	let env = || {
+		let id = env::var(aws_key_id)?;
+		let secret = env::var(aws_key_secret)?;
+		let region = env::var(aws_region)?;
+		Ok::<AwsCred, VarError>(AwsCred { id, secret, region })
+	};
+
 	match env() {
-		Ok(cred) => Ok(cred),
-		Err(_) => Err(BinRepoError::S3CredMissingEnv),
+		Ok(cred) => Some(cred),
+		Err(_) => None,
 	}
 }
 
@@ -149,10 +159,5 @@ mod tests_jc_only {
 	// #[test]
 	fn _cred_from_profile() {
 		assert!(extract_aws_cred_from_profile("jc-user").is_ok())
-	}
-
-	// #[test]
-	fn _cred_from_env() {
-		assert!(extract_aws_cred_from_env().is_ok())
 	}
 }

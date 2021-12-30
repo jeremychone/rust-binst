@@ -1,20 +1,16 @@
-pub mod setup;
-
-use std::{
-	fs::{self, read_to_string},
-	path::PathBuf,
-};
-
+use crate::paths::binst_bin_dir;
+use crate::repo::error::BinRepoError;
+use crate::repo::{BinRepo, MAIN_STREAM};
+use crate::utils::{clean_path, get_toml_value_as_string, UtilsError};
 use clap::ArgMatches;
 use semver::Version;
+use std::fs::{self, read_to_string};
+use std::path::PathBuf;
 use thiserror::Error;
 use toml::Value;
 
-use crate::{
-	paths::binst_bin_dir,
-	repo::{BinRepo, BinRepoError, MAIN_STREAM},
-	utils::{clean_path, get_toml_value_as_string, UtilsError},
-};
+pub mod argc;
+pub mod setup;
 
 struct InstalledBinInfo {
 	stream: String,
@@ -26,9 +22,6 @@ pub const CARGO_TOML: &str = "Cargo.toml";
 
 #[derive(Error, Debug)]
 pub enum ExecError {
-	#[error("Must have a -r repo_url for now (later can be found from later)")]
-	NoRepo,
-
 	#[error("Install command must have a binary name in argument")]
 	NoBinName,
 
@@ -60,21 +53,20 @@ pub enum ExecError {
 #[tokio::main]
 pub async fn exec_install(argc: &ArgMatches) -> Result<(), ExecError> {
 	let bin_name = argc.value_of("bin_name").ok_or(ExecError::NoBinName)?;
-	let repo_path = argc.value_of("repo").ok_or(ExecError::NoRepo)?;
-	let bin_repo = BinRepo::new(bin_name, repo_path, argc)?;
+	let bin_repo = BinRepo::new(bin_name, argc, false)?;
 
 	let stream = argc.value_of("stream").unwrap_or(MAIN_STREAM).to_owned();
-	Ok(bin_repo.install(stream).await?)
+	bin_repo.install(stream).await?;
+	Ok(())
 }
 
 #[tokio::main]
 pub async fn exec_publish(argc: &ArgMatches) -> Result<(), ExecError> {
-	let repo_path = argc.value_of("repo").ok_or(ExecError::NoRepo)?;
 	let toml = read_to_string(CARGO_TOML)?;
 	let toml: Value = toml::from_str(&toml)?;
 	let bin_name = get_toml_value_as_string(&toml, &["package", "name"])?;
 
-	let bin_repo = BinRepo::new(&bin_name, repo_path, argc)?;
+	let bin_repo = BinRepo::new(&bin_name, argc, true)?;
 	let at_path = argc.value_of("path").map(clean_path);
 
 	Ok(bin_repo.publish(at_path).await?)
@@ -90,7 +82,7 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 		version: installed_version,
 	} = extract_installed_bin_info(bin_name)?;
 
-	let repo = BinRepo::new(&bin_name, &repo_raw, argc)?;
+	let repo = BinRepo::new(&bin_name, argc, false)?;
 	let origin_toml = repo.get_origin_latest_toml_content(&stream).await?;
 
 	let origin_toml: Value = toml::from_str(&origin_toml)?;

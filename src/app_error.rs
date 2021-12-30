@@ -1,6 +1,7 @@
 use thiserror::Error;
 
-use crate::{exec::ExecError, repo::BinRepoError};
+use crate::exec::ExecError;
+use crate::repo::error::BinRepoError;
 
 #[derive(Error, Debug)]
 pub enum AppError {

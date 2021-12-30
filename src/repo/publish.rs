@@ -1,5 +1,5 @@
 use crate::exec::CARGO_TOML;
-use crate::repo::{aws_provider::build_new_aws_bucket_client, extract_stream, get_version_part, Kind, S3Info};
+use crate::repo::{aws_provider::build_new_aws_bucket_client, extract_stream, get_version_part, RepoInfo, S3Info};
 use crate::utils::{clean_path, exec_cmd_args, get_toml_value_as_string, safer_remove_dir};
 use libflate::gzip::Encoder;
 use semver::Version;
@@ -39,7 +39,9 @@ impl BinRepo {
 
 		println!(
 			"Publishing package: {}  |  version: {}  |  to: {}",
-			bin_name, version, &self.repo_raw
+			bin_name,
+			version,
+			self.publish_repo.url()
 		);
 
 		let mut build_args = vec!["build", "--release"];
@@ -99,12 +101,13 @@ impl BinRepo {
 			at_path,
 		};
 
-		match &self.kind {
-			Kind::Local(local_repo) => self.upload_to_local(local_repo, rec)?,
-			Kind::S3(s3_info) => self.upload_to_s3(s3_info, rec).await?,
-			Kind::Http(_) => return Err(BinRepoError::HttpProtocolNotSupportedForPublish),
+		match &self.publish_repo {
+			RepoInfo::Local(local_repo) => self.upload_to_local(local_repo, rec)?,
+			RepoInfo::S3(s3_info) => self.upload_to_s3(s3_info, rec).await?,
+			RepoInfo::Http(_) => return Err(BinRepoError::HttpProtocolNotSupportedForPublish),
 		};
 
+		// TODO - needds to make sure clean dir even if error above. Wrap in function.
 		safer_remove_dir(&tmp_dir)?;
 
 		Ok(())
@@ -180,6 +183,7 @@ impl BinRepo {
 			base,
 			profile,
 			bucket: bucket_name,
+			..
 		} = s3_info;
 
 		//// Create the bucket client

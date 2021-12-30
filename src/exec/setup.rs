@@ -2,7 +2,8 @@ use std::fs::{copy, create_dir_all, write};
 
 use semver::Version;
 
-use crate::{app_error::AppError, argc::version, repo::create_bin_symlink};
+use crate::exec::argc::version;
+use crate::{app_error::AppError, repo::create_bin_symlink};
 use crate::{paths::*, repo::create_install_toml};
 
 const SELF_REPO: &str = "https://binst.io/self";
