@@ -20,14 +20,19 @@ In short:
 Binary install on the development and install machines
 
 ```sh
-## On linux 
-curl -O https://binst.io/self/binst/x86_64-unknown-linux-gnu/stable/binst.tar.gz && \
+## On Linux x86 (Intel/AMD)
+curl -O https://repo.binst.io/binst/x86_64-unknown-linux-gnu/stable/binst.tar.gz && \
   tar -xvf binst.tar.gz && ./binst self && \
   echo 'source "$HOME/.binst/env"' >> ~/.bashrc && source "$HOME/.binst/env" 
 
 
-## On mac 
-curl -O https://binst.io/self/binst/x86_64-apple-darwin/stable/binst.tar.gz && \
+## On Mac Apple Silicon
+curl -O https://repo.binst.io/binst/arm64-apple-darwin/stable/binst.tar.gz && \
+  tar -xvf binst.tar.gz && ./binst self && \
+  echo '\nsource "$HOME/.binst/env"' >> ~/.zshenv && source "$HOME/.binst/env"
+
+## On Mac x86 (Intel/AMD)
+curl -O https://repo.binst.io/binst/x86_64-apple-darwin/stable/binst.tar.gz && \
   tar -xvf binst.tar.gz && ./binst self && \
   echo '\nsource "$HOME/.binst/env"' >> ~/.zshenv && source "$HOME/.binst/env"
 ```
@@ -46,18 +51,18 @@ cargo install binst
 
 > Note: You need to have a AWS S3 repository and the credential either as environment variables or as a aws profile
 
-On the development machine, to publish to a repo.
+Publishing a binary from dev machine. 
 
 ```sh
 ## Publish to S3 
 # Note: publish the --release, with the Cargo.tml version.
 binst publish -r s3://my_repo_bucket/repo_root --profile my_aws_profile
 
-# Or with the AWS credential env variables set
+# Or with the default AWS credential env variables set
 binst publish -r s3://my_repo_bucket/repo_root 
 ```
 
-On other machines, once binst installed (see below for the binary-only version install)
+Installing the binary published
 
 ```sh
 # Install the latest stable version published (the one in the info.toml)
