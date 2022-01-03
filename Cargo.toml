@@ -1,6 +1,6 @@
 [package]
 name = "binst"
-version = "0.1.2-RC.1"
+version = "0.1.2-RC.2"
 authors = ["Jeremy Chone <jeremy.chone@gmail.com>"]
 edition = "2018"
 description = "binst's goal is to provide a simple way to publish and install Rust based binaries without the need of cargo-install and the complexity of OS dependent package managers"
@@ -17,13 +17,12 @@ license = "MIT"
 
 [dependencies]
 tokio = {version = "1.5.0", features = ["full"]}
-reqwest = { version = "0.11" }
+reqwest = { version = "0.11", features = ["rustls-tls"]}
 anyhow = "1.0"
-rust-s3 = "0.27.0-rc4"
-platform-info = "0.1.0"
-dirs = "3.0"
-# clap = "2.33.3"
-clap =  {version = "3.0.0-rc.8", features = ["cargo"]}
+rust-s3 = "0.28"
+platform-info = "0.2.0"
+dirs = "4.0"
+clap =  {version = "3", features = ["cargo"]}
 thiserror = "1.0"
 toml = "0.5"
 tar = "0.4"

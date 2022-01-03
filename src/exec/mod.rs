@@ -20,36 +20,6 @@ struct InstalledBinInfo {
 
 pub const CARGO_TOML: &str = "Cargo.toml";
 
-#[derive(Error, Debug)]
-pub enum ExecError {
-	#[error("Install command must have a binary name in argument")]
-	NoBinName,
-
-	#[error("No repo in argument or in install.toml {0}")]
-	NoRepoFoundInArgumentOrInInstallToml(String),
-
-	#[error("Cannot find package dir for bin {0}")]
-	CannotFindBinPackageDir(String),
-
-	#[error("Version could not be found from bin path {0}")]
-	NoVersionFromBinPath(String),
-
-	#[error(transparent)]
-	BinRepoError(#[from] BinRepoError),
-
-	#[error(transparent)]
-	IOError(#[from] std::io::Error),
-
-	#[error(transparent)]
-	TomlError(#[from] toml::de::Error),
-
-	#[error(transparent)]
-	SemVerError(#[from] semver::Error),
-
-	#[error(transparent)]
-	UtilsError(#[from] UtilsError),
-}
-
 #[tokio::main]
 pub async fn exec_install(argc: &ArgMatches) -> Result<(), ExecError> {
 	let bin_name = argc.value_of("bin_name").ok_or(ExecError::NoBinName)?;
@@ -153,4 +123,34 @@ fn get_version_dir_from_symlink(bin_name: &str) -> Result<PathBuf, ExecError> {
 		Some(path) => Ok(path.to_path_buf()),
 		None => Err(ExecError::CannotFindBinPackageDir(bin_symlink.to_string_lossy().to_string())),
 	}
+}
+
+#[derive(Error, Debug)]
+pub enum ExecError {
+	#[error("Install command must have a binary name in argument")]
+	NoBinName,
+
+	#[error("No repo in argument or in install.toml {0}")]
+	NoRepoFoundInArgumentOrInInstallToml(String),
+
+	#[error("Cannot find package dir for bin {0}")]
+	CannotFindBinPackageDir(String),
+
+	#[error("Version could not be found from bin path {0}")]
+	NoVersionFromBinPath(String),
+
+	#[error(transparent)]
+	BinRepoError(#[from] BinRepoError),
+
+	#[error(transparent)]
+	IOError(#[from] std::io::Error),
+
+	#[error(transparent)]
+	TomlError(#[from] toml::de::Error),
+
+	#[error(transparent)]
+	SemVerError(#[from] semver::Error),
+
+	#[error(transparent)]
+	UtilsError(#[from] UtilsError),
 }
