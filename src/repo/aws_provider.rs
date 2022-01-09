@@ -5,13 +5,11 @@ use super::{BinRepoError, BINST_REPO_BUCKET, ENV_BINST_REPO_AWS_KEY_ID, ENV_BINS
 use dirs::home_dir;
 use regex::Regex;
 use s3::{creds::Credentials, Bucket, Region};
-use std::{
-	collections::HashMap,
-	env::{self, VarError},
-	fs::File,
-	io::Read,
-	str::FromStr,
-};
+use std::collections::HashMap;
+use std::env::{self, VarError};
+use std::fs::File;
+use std::io::Read;
+use std::str::FromStr;
 
 const AWS_ACCESS_KEY_ID: &str = "AWS_ACCESS_KEY_ID";
 const AWS_SECRET_ACCESS_KEY: &str = "AWS_SECRET_ACCESS_KEY";
@@ -61,9 +59,6 @@ pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<Str
 	Ok(bucket)
 }
 
-// region:    Extract AWS Credentials
-
-// endregion: Extract AWS Credentials
 fn extract_aws_cred_from_env(aws_key_id: &str, aws_key_secret: &str, aws_region: &str) -> Option<AwsCred> {
 	// Note: style experimentation
 	let env = || {
