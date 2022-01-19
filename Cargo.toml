@@ -16,11 +16,11 @@ categories = ["command-line-interface"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-tokio = {version = "1.5.0", features = ["full"]}
-reqwest = { version = "0.11", features = ["rustls-tls"]}
+tokio = {version = "1", features = ["full"]}
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"]}
 anyhow = "1.0"
-rust-s3 = "0.28"
-platform-info = "0.2.0"
+rust-s3 = {version = "0.28", default-features = false, features = ["tokio-rustls-tls"]}
+platform-info = "0.2"
 dirs = "4.0"
 clap =  {version = "3", features = ["cargo"]}
 thiserror = "1.0"
@@ -28,5 +28,5 @@ toml = "0.5"
 tar = "0.4"
 libflate = "1"
 regex = "1"
-semver = "1.0.3"
+semver = "1.0"
 url = "2"
