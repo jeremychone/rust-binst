@@ -63,7 +63,7 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 
 	if origin_version > installed_version {
 		println!(
-			"  Installing emote version {} ( > local version {})",
+			"  Installing remote version {} ( > local version {})",
 			origin_version, installed_version
 		);
 		repo.install(stream).await?;
