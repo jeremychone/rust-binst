@@ -22,7 +22,7 @@ anyhow = "1.0"
 rust-s3 = {version = "0.28", default-features = false, features = ["tokio-rustls-tls"]}
 platform-info = "1"
 dirs = "4.0"
-clap =  {version = "3", features = ["cargo"]}
+clap =  {version = "4", features = ["cargo"]}
 thiserror = "1.0"
 toml = "0.5"
 tar = "0.4"

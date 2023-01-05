@@ -195,7 +195,7 @@ impl BinRepo {
 
 		//// Upload latest.toml
 		if !is_at_path {
-			let latest_key = clean_path(&format!("{}/latest.toml", origin_target_key));
+			let latest_key = clean_path(format!("{}/latest.toml", origin_target_key));
 			let mut latest_toml = File::open(&latest_toml)?;
 			let mut buffer = String::new();
 			latest_toml.read_to_string(&mut buffer)?;
@@ -213,7 +213,7 @@ impl BinRepo {
 		};
 
 		//// Upload the package gz
-		let gz_key = clean_path(&format!("{}/{}.tar.gz", package_key, bin_name));
+		let gz_key = clean_path(format!("{}/{}.tar.gz", package_key, bin_name));
 		// TODO: need to stream content
 		let mut gz_file = File::open(&gz_file_path)?;
 		let mut buffer = Vec::new();
@@ -222,7 +222,7 @@ impl BinRepo {
 		println!("  uploaded: s3:://{}/{}", bucket_name, gz_key);
 
 		//// Upload the package toml
-		let package_key = clean_path(&format!("{}/{}.toml", package_key, bin_name));
+		let package_key = clean_path(format!("{}/{}.toml", package_key, bin_name));
 		let mut package_toml = File::open(&package_toml_path)?;
 		let mut buffer = String::new();
 		package_toml.read_to_string(&mut buffer)?;

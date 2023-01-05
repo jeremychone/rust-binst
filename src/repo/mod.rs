@@ -134,14 +134,14 @@ impl BinRepo {
 		let bin_name = bin_name.to_string();
 
 		let target = if publish {
-			argc.value_of("target").map(|target| target.to_string())
+			argc.get_one::<String>("target").map(|target| target.to_string())
 		} else {
 			None
 		};
 
 		// build the RepoInfo
-		let argc_profile = argc.value_of("profile");
-		let argc_repo = argc.value_of("repo");
+		let argc_profile = argc.get_one::<String>("profile").map(|s| s.as_str());
+		let argc_repo = argc.get_one::<String>("repo");
 		let (install_repo, publish_repo) = if let Some(repo) = argc_repo {
 			let install_repo = RepoInfo::from_repo_string(repo, argc_profile)?;
 			let publish_repo = RepoInfo::from_repo_string(repo, argc_profile)?;

@@ -69,12 +69,12 @@ pub fn safer_remove_dir(dir: &Path) -> Result<(), UtilsError> {
 }
 
 //// Remove redundant / as well as start and end /
-pub fn clean_path(uri: &str) -> String {
+pub fn clean_path(uri: impl AsRef<str>) -> String {
 	fn cleaner(s: &str) -> String {
 		s.split('/').filter(|p| !p.is_empty()).collect::<Vec<&str>>().join("/")
 	}
 
-	uri.splitn(2, "://").map(cleaner).collect::<Vec<String>>().join("://")
+	uri.as_ref().splitn(2, "://").map(cleaner).collect::<Vec<String>>().join("://")
 }
 
 pub fn exec_cmd_args(cmd: &str, args: &[&str]) -> Result<(), UtilsError> {

@@ -22,10 +22,13 @@ pub const CARGO_TOML: &str = "Cargo.toml";
 
 #[tokio::main]
 pub async fn exec_install(argc: &ArgMatches) -> Result<(), ExecError> {
-	let bin_name = argc.value_of("bin_name").ok_or(ExecError::NoBinName)?;
+	let bin_name = argc.get_one::<String>("bin_name").ok_or(ExecError::NoBinName)?;
 	let bin_repo = BinRepo::new(bin_name, argc, false)?;
 
-	let stream = argc.value_of("stream").unwrap_or(MAIN_STREAM).to_owned();
+	let stream = argc
+		.get_one::<String>("stream")
+		.map(|s| s.to_string())
+		.unwrap_or_else(|| MAIN_STREAM.to_string());
 	bin_repo.install(stream).await?;
 	Ok(())
 }
@@ -37,14 +40,14 @@ pub async fn exec_publish(argc: &ArgMatches) -> Result<(), ExecError> {
 	let bin_name = get_toml_value_as_string(&toml, &["package", "name"])?;
 
 	let bin_repo = BinRepo::new(&bin_name, argc, true)?;
-	let at_path = argc.value_of("path").map(clean_path);
+	let at_path = argc.get_one::<String>("path").map(clean_path);
 
 	Ok(bin_repo.publish(at_path).await?)
 }
 
 #[tokio::main]
 pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
-	let bin_name = argc.value_of("bin_name").ok_or(ExecError::NoBinName)?;
+	let bin_name = argc.get_one::<String>("bin_name").ok_or(ExecError::NoBinName)?;
 
 	let InstalledBinInfo {
 		stream,
