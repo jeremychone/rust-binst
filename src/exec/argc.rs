@@ -75,10 +75,8 @@ fn arg_stream() -> Arg<'static> {
 }
 
 fn arg_target() -> Arg<'static> {
-	Arg::new("target")
-		.long("target")
-		.short('t')
-		.takes_value(true)
-		.help("Platform target, e.g., x86_64-apple-darwin. Override the default target. Must be supported by cargo --target")
+	Arg::new("target").long("target").short('t').takes_value(true).help(
+		"Platform target, e.g., x86_64-apple-darwin. Override the default target. Must be supported by cargo --target",
+	)
 }
 // endregion: Common Args

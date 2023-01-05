@@ -71,7 +71,7 @@ pub fn safer_remove_dir(dir: &Path) -> Result<(), UtilsError> {
 //// Remove redundant / as well as start and end /
 pub fn clean_path(uri: &str) -> String {
 	fn cleaner(s: &str) -> String {
-		s.split("/").filter(|p| !p.is_empty()).collect::<Vec<&str>>().join("/").to_string()
+		s.split('/').filter(|p| !p.is_empty()).collect::<Vec<&str>>().join("/")
 	}
 
 	uri.splitn(2, "://").map(cleaner).collect::<Vec<String>>().join("://")
@@ -108,7 +108,10 @@ mod tests {
 
 		// clean url like
 		assert_eq!("https://example.net/foo/bar", clean_path("https://example.net/foo/bar"));
-		assert_eq!("https://example.net/foo/bar", clean_path("https://example.net/foo/bar/"));
+		assert_eq!(
+			"https://example.net/foo/bar",
+			clean_path("https://example.net/foo/bar/")
+		);
 		assert_eq!("example.net/foo/bar", clean_path("example.net////foo/bar"));
 	}
 }

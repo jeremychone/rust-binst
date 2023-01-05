@@ -31,7 +31,7 @@ pub fn binst_tmp_dir(folder: Option<&str>) -> Result<PathBuf, std::io::Error> {
 }
 
 pub fn binst_package_bin_dir(bin_name: &str, version: &Version) -> Result<PathBuf, std::io::Error> {
-	let path = binst_dir().join("packages").join(bin_name).join(get_version_part(&version));
+	let path = binst_dir().join("packages").join(bin_name).join(get_version_part(version));
 	if !path.is_dir() {
 		create_dir_all(&path)?;
 	}

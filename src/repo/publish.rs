@@ -95,7 +95,7 @@ impl BinRepo {
 		let rec = UploadRec {
 			latest_toml: latest_toml_path,
 			gz: gz_path,
-			version: version,
+			version,
 			stream: stream.to_string(),
 			package_toml: package_toml_path,
 			at_path,
@@ -127,8 +127,8 @@ impl BinRepo {
 		} = upload_rec;
 
 		let is_at_path = at_path.is_some();
-		let path_or_stream = at_path.unwrap_or(stream.clone());
-		let origin_target_dir = Path::new(origin_repo).join(&self.origin_bin_target_uri(&path_or_stream));
+		let path_or_stream = at_path.unwrap_or(stream);
+		let origin_target_dir = Path::new(origin_repo).join(self.origin_bin_target_uri(&path_or_stream));
 
 		if !origin_target_dir.is_file() {
 			create_dir_all(&origin_target_dir)?;
@@ -190,7 +190,7 @@ impl BinRepo {
 		let bucket = build_new_aws_bucket_client(bucket_name, profile).await?;
 
 		let is_at_path = at_path.is_some();
-		let path_or_stream = at_path.unwrap_or(stream.clone());
+		let path_or_stream = at_path.unwrap_or(stream);
 		let origin_target_key = format!("{}/{}", base, self.origin_bin_target_uri(&path_or_stream));
 
 		//// Upload latest.toml

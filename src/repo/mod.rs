@@ -15,13 +15,13 @@ pub mod error;
 mod install;
 mod publish;
 
-pub const BINST_REPO_URL: &'static str = "https://repo.binst.io/";
-pub const BINST_REPO_BUCKET: &'static str = "binst-repo";
-pub const BINST_REPO_AWS_PROFILE: &'static str = "binst-repo-user";
+pub const BINST_REPO_URL: &str = "https://repo.binst.io/";
+pub const BINST_REPO_BUCKET: &str = "binst-repo";
+pub const BINST_REPO_AWS_PROFILE: &str = "binst-repo-user";
 // env names for the binst repo
-pub const ENV_BINST_REPO_AWS_KEY_ID: &'static str = "BINST_REPO_AWS_KEY_ID";
-pub const ENV_BINST_REPO_AWS_KEY_SECRET: &'static str = "BINST_REPO_AWS_KEY_SECRET";
-pub const ENV_BINST_REPO_AWS_REGION: &'static str = "BINST_REPO_AWS_REGION";
+pub const ENV_BINST_REPO_AWS_KEY_ID: &str = "BINST_REPO_AWS_KEY_ID";
+pub const ENV_BINST_REPO_AWS_KEY_SECRET: &str = "BINST_REPO_AWS_KEY_SECRET";
+pub const ENV_BINST_REPO_AWS_REGION: &str = "BINST_REPO_AWS_REGION";
 
 pub const MAIN_STREAM: &str = "main";
 
@@ -88,7 +88,7 @@ impl S3Info {
 		let mut parts = repo_path.splitn(2, '/');
 		let bucket = match parts.next() {
 			Some(bucket) => {
-				if bucket.len() == 0 {
+				if bucket.is_empty() {
 					return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned()));
 				}
 				bucket
@@ -99,7 +99,7 @@ impl S3Info {
 
 		let base = match parts.next() {
 			Some(base) => {
-				if base.starts_with("/") {
+				if base.starts_with('/') {
 					return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned()));
 				}
 				base
@@ -151,7 +151,7 @@ impl BinRepo {
 		};
 
 		Ok(BinRepo {
-			bin_name: bin_name.to_owned(),
+			bin_name,
 			install_repo,
 			publish_repo,
 			target,
@@ -159,7 +159,7 @@ impl BinRepo {
 	}
 
 	fn origin_bin_target_uri(&self, stream_or_path: &str) -> String {
-		let target = self.target.as_ref().map(|s| s.to_string()).unwrap_or(os_target());
+		let target = self.target.as_ref().map(|s| s.to_string()).unwrap_or_else(os_target);
 		format!("{}/{}/{}", self.bin_name, target, stream_or_path)
 	}
 }
@@ -187,17 +187,13 @@ fn get_release_bin(name: &str, target: &Option<String>) -> Result<PathBuf, BinRe
 }
 
 pub fn extract_stream(version: &Version) -> String {
-	if version.pre.len() > 0 {
+	if !version.pre.is_empty() {
 		let pre = version.pre.as_str();
 		let rx = Regex::new("[a-zA-Z-]+").unwrap(); // can't fail if it worked once
-		let stream = rx.find(&pre).and_then(|m| Some(m.as_str())).unwrap_or("pre");
-		let stream = if stream.ends_with("-") {
-			&stream[..stream.len() - 1]
-		} else {
-			stream
-		};
-
-		stream.to_owned()
+		let stream = rx.find(pre).map(|m| m.as_str()).unwrap_or("pre");
+		// let stream = stream.strip_suffix('-');
+		let stream = stream.strip_suffix('-').unwrap_or(stream);
+		stream.to_string()
 	} else {
 		MAIN_STREAM.to_string()
 	}
@@ -209,10 +205,10 @@ pub fn extract_stream(version: &Version) -> String {
 
 //// Returns version path part.
 pub fn get_version_part(version: &Version) -> String {
-	format!("{}", version.to_string())
+	version.to_string()
 }
 
-pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &PathBuf) -> Result<PathBuf, BinRepoError> {
+pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &Path) -> Result<PathBuf, BinRepoError> {
 	// make sure the .binst/bin/ directory exists
 	let bin_dir = binst_bin_dir();
 	if !bin_dir.is_dir() {
@@ -220,20 +216,27 @@ pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &PathBuf) -> Result<Path
 	}
 
 	if !unpacked_bin.is_file() {
-		return Err(BinRepoError::UnpackedBinFileNotFound(unpacked_bin.to_string_lossy().to_string()));
+		return Err(BinRepoError::UnpackedBinFileNotFound(
+			unpacked_bin.to_string_lossy().to_string(),
+		));
 	}
 	let bin_symlink_path = binst_bin_dir().join(bin_name);
 	if bin_symlink_path.is_file() {
 		remove_file(&bin_symlink_path)?;
 	}
-	sym_link(&unpacked_bin, &bin_symlink_path)?;
+	sym_link(unpacked_bin, &bin_symlink_path)?;
 	Ok(bin_symlink_path)
 }
 
-pub fn create_install_toml(package_dir: &PathBuf, repo: &str, stream: &str, version: &Version) -> Result<(), BinRepoError> {
+pub fn create_install_toml(
+	package_dir: &Path,
+	repo: &str,
+	stream: &str,
+	version: &Version,
+) -> Result<(), BinRepoError> {
 	let install_content = create_install_toml_content(repo, stream, version);
 	let install_path = package_dir.join("install.toml");
-	File::create(&install_path)?.write_all(install_content.as_bytes())?;
+	File::create(install_path)?.write_all(install_content.as_bytes())?;
 	Ok(())
 }
 

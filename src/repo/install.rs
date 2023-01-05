@@ -4,7 +4,6 @@ use crate::{
 	utils::{get_toml_value_as_string, safer_remove_dir},
 };
 use libflate::gzip::Decoder;
-use reqwest;
 use semver::Version;
 use std::{
 	fs::{copy, create_dir_all, read_to_string, remove_file, File},
@@ -26,7 +25,9 @@ impl BinRepo {
 
 		//// download the package tar files to the folder
 		let (download_url, version, tmp_gz) = match &self.install_repo {
-			RepoInfo::Local(local_repo_origin) => self.download_from_local(local_repo_origin, &tmp_dir, &stream).await?,
+			RepoInfo::Local(local_repo_origin) => {
+				self.download_from_local(local_repo_origin, &tmp_dir, &stream).await?
+			}
 			RepoInfo::S3(s3_info) => self.download_from_s3(s3_info, &tmp_dir, &stream).await?,
 			RepoInfo::Http(base_url) => self.download_from_http(base_url, &tmp_dir, &stream).await?,
 		};
@@ -34,7 +35,7 @@ impl BinRepo {
 		//// copy the gz file
 		let package_dir = binst_package_bin_dir(&self.bin_name, &version)?;
 		let gz_path = package_dir.join(format!("{}.tar.gz", self.bin_name));
-		copy(&tmp_gz, &gz_path)?;
+		copy(tmp_gz, &gz_path)?;
 
 		//// unpack
 		let unpacked_dir = package_dir.join("unpacked");
@@ -58,7 +59,7 @@ impl BinRepo {
 		remove_file(&tar_path)?;
 
 		// create the install.toml
-		create_install_toml(&package_dir, &self.install_repo.url(), &stream, &version)?;
+		create_install_toml(&package_dir, self.install_repo.url(), &stream, &version)?;
 
 		//// create the symlink
 		let unpacked_bin = unpacked_dir.join(&self.bin_name);
@@ -92,7 +93,9 @@ impl BinRepo {
 				let origin_target_dir = Path::new(local_repo_origin).join(base_uri);
 				let origin_latest_path = origin_target_dir.join(LATEST_TOML);
 				if !origin_latest_path.is_file() {
-					return Err(BinRepoError::OriginLatestNotFound(origin_latest_path.to_string_lossy().to_string()));
+					return Err(BinRepoError::OriginLatestNotFound(
+						origin_latest_path.to_string_lossy().to_string(),
+					));
 				}
 				read_to_string(&origin_latest_path)?
 			}
@@ -103,15 +106,16 @@ impl BinRepo {
 					bucket: bucket_name,
 					..
 				} = s3_info;
-				let bucket = build_new_aws_bucket_client(&bucket_name, &profile).await?;
+				let bucket = build_new_aws_bucket_client(bucket_name, profile).await?;
 				let base_key = format!("{}/{}", base, base_uri);
 				let latest_key = &format!("{}/{}", base_key, LATEST_TOML);
 				let (data, _) = bucket.get_object(latest_key).await?;
-				let data = std::str::from_utf8(&data).or_else(|_| Err(BinRepoError::InvalidInfoToml(latest_key.to_owned())))?;
+				let data =
+					std::str::from_utf8(&data).map_err(|_| BinRepoError::InvalidInfoToml(latest_key.to_owned()))?;
 
 				data.to_string()
 			}
-			RepoInfo::Http(base_url) => get_origin_latest_toml_content_from_base_url(&base_url, &base_uri).await?,
+			RepoInfo::Http(base_url) => get_origin_latest_toml_content_from_base_url(base_url, &base_uri).await?,
 		};
 
 		Ok(content)
@@ -139,7 +143,12 @@ async fn get_origin_latest_toml_content_from_base_url(base_url: &str, base_uri: 
 
 // download from http
 impl BinRepo {
-	async fn download_from_http(&self, http_base: &str, tmp_dir: &PathBuf, stream: &str) -> Result<(String, Version, PathBuf), BinRepoError> {
+	async fn download_from_http(
+		&self,
+		http_base: &str,
+		tmp_dir: &Path,
+		stream: &str,
+	) -> Result<(String, Version, PathBuf), BinRepoError> {
 		let http_base = format!("{}/{}", http_base, self.origin_bin_target_uri(stream));
 		// download the info.toml
 		let version = self.get_origin_latest_version(stream).await?;
@@ -159,7 +168,12 @@ impl BinRepo {
 
 // download from s3
 impl BinRepo {
-	async fn download_from_s3(&self, s3_info: &S3Info, tmp_dir: &PathBuf, stream: &str) -> Result<(String, Version, PathBuf), BinRepoError> {
+	async fn download_from_s3(
+		&self,
+		s3_info: &S3Info,
+		tmp_dir: &Path,
+		stream: &str,
+	) -> Result<(String, Version, PathBuf), BinRepoError> {
 		let S3Info {
 			base,
 			profile,
@@ -196,7 +210,7 @@ impl BinRepo {
 	async fn download_from_local(
 		&self,
 		local_repo_origin: &str,
-		tmp_dir: &PathBuf,
+		tmp_dir: &Path,
 		stream: &str,
 	) -> Result<(String, Version, PathBuf), BinRepoError> {
 		// base orign path the e.g., ..repo/bin_name/target/stream
@@ -207,12 +221,14 @@ impl BinRepo {
 		let version = self.get_origin_latest_version(stream).await?;
 
 		// e.g., ...repo/bin_name/target/main/v0.1.2/
-		let origin_dir = origin_target_dir.join(format!("{}", get_version_part(&version)));
+		let origin_dir = origin_target_dir.join(get_version_part(&version));
 
 		// check origin tar file
 		let origin_gz = origin_dir.join(format!("{}.tar.gz", self.bin_name));
 		if !origin_gz.is_file() {
-			return Err(BinRepoError::OriginTarGzNotFound(origin_gz.to_string_lossy().to_string()));
+			return Err(BinRepoError::OriginTarGzNotFound(
+				origin_gz.to_string_lossy().to_string(),
+			));
 		}
 
 		let tmp_gz = tmp_dir.join(format!("{}.tar.gz", self.bin_name));

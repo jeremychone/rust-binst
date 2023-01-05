@@ -1,7 +1,10 @@
 ///////
 // Utilities for Aws S3 resources
 
-use super::{BinRepoError, BINST_REPO_BUCKET, ENV_BINST_REPO_AWS_KEY_ID, ENV_BINST_REPO_AWS_KEY_SECRET, ENV_BINST_REPO_AWS_REGION};
+use super::{
+	BinRepoError, BINST_REPO_BUCKET, ENV_BINST_REPO_AWS_KEY_ID, ENV_BINST_REPO_AWS_KEY_SECRET,
+	ENV_BINST_REPO_AWS_REGION,
+};
 use dirs::home_dir;
 use regex::Regex;
 use s3::{creds::Credentials, Bucket, Region};
@@ -24,7 +27,11 @@ struct AwsCred {
 
 pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<String>) -> Result<Bucket, BinRepoError> {
 	let mut aws_cred = if bucket_name == BINST_REPO_BUCKET {
-		extract_aws_cred_from_env(ENV_BINST_REPO_AWS_KEY_ID, ENV_BINST_REPO_AWS_KEY_SECRET, ENV_BINST_REPO_AWS_REGION)
+		extract_aws_cred_from_env(
+			ENV_BINST_REPO_AWS_KEY_ID,
+			ENV_BINST_REPO_AWS_KEY_SECRET,
+			ENV_BINST_REPO_AWS_REGION,
+		)
 	} else {
 		None
 	};
@@ -109,8 +116,8 @@ fn extract_region_from_aws_config(profile: &str) -> Result<Option<String>, std::
 }
 
 fn parse_aws_regex_block(rgx_str: &str, content: &str) -> HashMap<String, String> {
-	let re = Regex::new(&rgx_str).unwrap();
-	let caps = re.captures(&content).unwrap();
+	let re = Regex::new(rgx_str).unwrap();
+	let caps = re.captures(content).unwrap();
 	let block = caps.get(1).map_or("", |m| m.as_str()).to_owned();
 	parse_aws_block(&block)
 }
@@ -119,7 +126,7 @@ fn parse_aws_block(block: &str) -> HashMap<String, String> {
 	let mut data = HashMap::new();
 
 	for line in block.lines() {
-		let mut parts = line.splitn(2, "=").map(|s| s.trim());
+		let mut parts = line.splitn(2, '=').map(|s| s.trim());
 		let name = parts.next().map(|s| s.trim().to_owned());
 		let value = parts.next().map(|s| s.trim().to_owned());
 		if let (Some(name), Some(value)) = (name, value) {

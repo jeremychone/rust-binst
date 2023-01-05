@@ -52,7 +52,7 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 		version: installed_version,
 	} = extract_installed_bin_info(bin_name)?;
 
-	let repo = BinRepo::new(&bin_name, argc, false)?;
+	let repo = BinRepo::new(bin_name, argc, false)?;
 	let origin_toml = repo.get_origin_latest_toml_content(&stream).await?;
 
 	let origin_toml: Value = toml::from_str(&origin_toml)?;
@@ -81,14 +81,17 @@ fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecEr
 	let version_dir = get_version_dir_from_symlink(bin_name)?;
 
 	// extract the version from the dir path
-	let version = version_dir
-		.file_name()
-		.and_then(|f| Some(f.to_string_lossy().to_string()))
-		.and_then(|f| match Version::parse(&f) {
-			Ok(version) => Some(version),
-			Err(_) => None,
-		});
-	let version = version.ok_or(ExecError::NoVersionFromBinPath(version_dir.to_string_lossy().to_string()))?;
+	let version =
+		version_dir
+			.file_name()
+			.map(|f| f.to_string_lossy().to_string())
+			.and_then(|f| match Version::parse(&f) {
+				Ok(version) => Some(version),
+				Err(_) => None,
+			});
+	let version = version.ok_or(ExecError::NoVersionFromBinPath(
+		version_dir.to_string_lossy().to_string(),
+	))?;
 
 	let install_toml_path = version_dir.join("install.toml");
 	let install_toml = read_to_string(&install_toml_path)?;
@@ -110,7 +113,11 @@ fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecEr
 		}
 	};
 
-	Ok(InstalledBinInfo { version, stream, repo_raw })
+	Ok(InstalledBinInfo {
+		version,
+		stream,
+		repo_raw,
+	})
 }
 
 fn get_version_dir_from_symlink(bin_name: &str) -> Result<PathBuf, ExecError> {
@@ -121,7 +128,9 @@ fn get_version_dir_from_symlink(bin_name: &str) -> Result<PathBuf, ExecError> {
 
 	match package {
 		Some(path) => Ok(path.to_path_buf()),
-		None => Err(ExecError::CannotFindBinPackageDir(bin_symlink.to_string_lossy().to_string())),
+		None => Err(ExecError::CannotFindBinPackageDir(
+			bin_symlink.to_string_lossy().to_string(),
+		)),
 	}
 }
 
