@@ -20,7 +20,7 @@ tokio = {version = "1", features = ["full"]}
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"]}
 anyhow = "1.0"
 rust-s3 = {version = "0.28", default-features = false, features = ["tokio-rustls-tls"]}
-platform-info = "0.2"
+platform-info = "1"
 dirs = "4.0"
 clap =  {version = "3", features = ["cargo"]}
 thiserror = "1.0"
