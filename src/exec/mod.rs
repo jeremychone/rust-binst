@@ -1,10 +1,10 @@
 use crate::paths::binst_bin_dir;
-use crate::repo::error::BinRepoError;
+use crate::repo::Error;
 use crate::repo::{BinRepo, MAIN_STREAM};
-use crate::utils::{clean_path, get_toml_value_as_string, UtilsError};
+use crate::utils::{clean_path, get_toml_value_as_string};
 use clap::ArgMatches;
 use semver::Version;
-use std::fs::{self, read_to_string};
+use std::fs;
 use std::path::PathBuf;
 use thiserror::Error;
 use toml::Value;
@@ -35,7 +35,7 @@ pub async fn exec_install(argc: &ArgMatches) -> Result<(), ExecError> {
 
 #[tokio::main]
 pub async fn exec_publish(argc: &ArgMatches) -> Result<(), ExecError> {
-	let toml = read_to_string(CARGO_TOML)?;
+	let toml = fs::read_to_string(CARGO_TOML)?;
 	let toml: Value = toml::from_str(&toml)?;
 	let bin_name = get_toml_value_as_string(&toml, &["package", "name"])?;
 
@@ -97,7 +97,7 @@ fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecEr
 	))?;
 
 	let install_toml_path = version_dir.join("install.toml");
-	let install_toml = read_to_string(&install_toml_path)?;
+	let install_toml = fs::read_to_string(&install_toml_path)?;
 	let install_toml: Value = toml::from_str(&install_toml)?;
 
 	// get the stream
@@ -152,7 +152,7 @@ pub enum ExecError {
 	NoVersionFromBinPath(String),
 
 	#[error(transparent)]
-	BinRepoError(#[from] BinRepoError),
+	BinRepoError(#[from] Error),
 
 	#[error(transparent)]
 	IOError(#[from] std::io::Error),
@@ -164,5 +164,5 @@ pub enum ExecError {
 	SemVerError(#[from] semver::Error),
 
 	#[error(transparent)]
-	UtilsError(#[from] UtilsError),
+	UtilsError(#[from] crate::utils::Error),
 }

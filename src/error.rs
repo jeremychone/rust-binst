@@ -1,25 +1,22 @@
-use thiserror::Error;
-
 use crate::exec::ExecError;
-use crate::repo::error::BinRepoError;
 
-#[derive(Error, Debug)]
-pub enum AppError {
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
 	#[error("No Home Dir")]
 	NoHomeDir,
 
 	// Represents all other cases of `std::io::Error`.
 	#[error(transparent)]
-	IOError(#[from] std::io::Error),
+	IO(#[from] std::io::Error),
 
 	#[error(transparent)]
-	InstallError(#[from] ExecError),
+	Install(#[from] ExecError),
 
 	#[error(transparent)]
-	BinRepoError(#[from] BinRepoError),
+	BinRepo(#[from] crate::repo::Error),
 
 	#[error(transparent)]
-	ClapError(#[from] clap::Error),
+	Clap(#[from] clap::Error),
 
 	#[error("Cargo.toml has an invalid semver version {0}")]
 	CargoInvalidVersion(String),

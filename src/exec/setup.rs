@@ -1,20 +1,19 @@
-use std::fs::{copy, create_dir_all, write};
-
-use semver::Version;
-
 use crate::exec::argc::version;
-use crate::{app_error::AppError, repo::create_bin_symlink};
+use crate::repo::create_bin_symlink;
 use crate::{paths::*, repo::create_install_toml};
+use crate::{Error, Result};
+use semver::Version;
+use std::fs::{copy, create_dir_all, write};
 
 const SELF_REPO: &str = "https://binst.io/self";
 const SELF_STREAM: &str = "main";
 
-pub fn exec_setup() -> Result<(), AppError> {
+pub fn exec_setup() -> Result<()> {
 	let home_dir = dirs::home_dir().expect("No home dir");
 	let bin_name = "binst";
 
 	if !home_dir.is_dir() {
-		return Err(AppError::NoHomeDir);
+		return Err(Error::NoHomeDir);
 	}
 
 	// create the binst as needed
@@ -36,7 +35,7 @@ pub fn exec_setup() -> Result<(), AppError> {
 	let version = version();
 	let version = match Version::parse(&version) {
 		Ok(version) => version,
-		Err(_) => return Err(AppError::CargoInvalidVersion(version.to_owned())),
+		Err(_) => return Err(Error::CargoInvalidVersion(version.to_owned())),
 	};
 
 	let package_dir = binst_package_bin_dir(bin_name, &version)?;

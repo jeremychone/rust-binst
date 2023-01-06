@@ -88,6 +88,23 @@ cool_cli ....
 - **Few protocols** - S3 to publish, https/s3 to install. Git planned.
 
 
+## S3 Credentials - Environment variables
+
+`binst` gets the S3 credentials the following way. 
+
+- if `--profile profile-name` is defined, it will take the standards AWS 
+- Otherwise, 
+  - first, it will check the `BINST_...` environment variables
+    - `BINST_REPO_AWS_KEY_ID` 
+    - `BINST_REPO_AWS_KEY_SECRET` 
+    - `BINST_REPO_AWS_REGION` 
+    - `BINST_REPO_AWS_ENDPOINT` (optional, useful when using minio as object store)
+  - Ohterwise, as last fall back, will see the standard `AWS_...` environment variables
+    - `AWS_ACCESS_KEY_ID`
+    - `AWS_SECRET_ACCESS_KEY`
+    - `AWS_DEFAULT_REGION`
+    - `AWS_ENDPOINT` (optional, useful when using minio as object store)
+
 ## Repo layout
 
 ```yaml
@@ -110,8 +127,7 @@ cool_cli ....
 
 ```                
 
-## Local dir
-
+## Local dir layout
 
 ```yaml
 - ~/.binst/

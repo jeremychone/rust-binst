@@ -1,18 +1,22 @@
 // #![allow(unused)] // silence unused warnings while exploring (to comment out)
 
-mod app_error;
+mod error;
 mod exec;
 mod paths;
+mod prelude;
 mod repo;
 mod utils;
 
-use app_error::AppError;
-use exec::{exec_install, exec_publish, exec_update};
-
 use crate::exec::setup::exec_setup;
 use exec::argc::cmd_app;
+use exec::{exec_install, exec_publish, exec_update};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+// Re-export the crate Error.
+pub use crate::error::Error;
+// Alias Result to be the crate Result.
+pub type Result<T> = core::result::Result<T, Error>;
+
+fn main() -> Result<()> {
 	match run() {
 		Ok(_) => println!("✔ All good and well"),
 		Err(e) => {
@@ -21,7 +25,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	};
 	Ok(())
 }
-fn run() -> Result<(), AppError> {
+
+fn run() -> Result<()> {
 	let cmd = cmd_app().get_matches();
 
 	match cmd.subcommand() {

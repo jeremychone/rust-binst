@@ -1,15 +1,16 @@
 use crate::exec::CARGO_TOML;
-use crate::repo::{aws_provider::build_new_aws_bucket_client, extract_stream, get_version_part, RepoInfo, S3Info};
+use crate::repo::s3w::new_repo_bucket;
+use crate::repo::{extract_stream, get_version_part, RepoInfo, S3Info};
 use crate::utils::{clean_path, exec_cmd_args, get_toml_value_as_string, safer_remove_dir};
 use libflate::gzip::Encoder;
 use semver::Version;
 use std::fs::{copy, create_dir, create_dir_all, read_to_string, write, File};
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 use tar::Builder;
 use toml::Value;
 
-use super::{get_release_bin, make_bin_temp_dir, BinRepo, BinRepoError};
+use super::{get_release_bin, make_bin_temp_dir, BinRepo, Error};
 
 #[derive(Debug)]
 struct UploadRec {
@@ -23,7 +24,7 @@ struct UploadRec {
 
 // repo main publish method
 impl BinRepo {
-	pub async fn publish(&self, at_path: Option<String>) -> Result<(), BinRepoError> {
+	pub async fn publish(&self, at_path: Option<String>) -> Result<(), Error> {
 		let bin_name = &self.bin_name;
 
 		// create the temp dir
@@ -104,7 +105,7 @@ impl BinRepo {
 		match &self.publish_repo {
 			RepoInfo::Local(local_repo) => self.upload_to_local(local_repo, rec)?,
 			RepoInfo::S3(s3_info) => self.upload_to_s3(s3_info, rec).await?,
-			RepoInfo::Http(_) => return Err(BinRepoError::HttpProtocolNotSupportedForPublish),
+			RepoInfo::Http(_) => return Err(Error::HttpProtocolNotSupportedForPublish),
 		};
 
 		// TODO - needds to make sure clean dir even if error above. Wrap in function.
@@ -116,7 +117,7 @@ impl BinRepo {
 
 // upload to local
 impl BinRepo {
-	fn upload_to_local(&self, origin_repo: &str, upload_rec: UploadRec) -> Result<(), BinRepoError> {
+	fn upload_to_local(&self, origin_repo: &str, upload_rec: UploadRec) -> Result<(), Error> {
 		let UploadRec {
 			version,
 			latest_toml,
@@ -167,7 +168,7 @@ impl BinRepo {
 
 // upload to s3
 impl BinRepo {
-	async fn upload_to_s3(&self, s3_info: &S3Info, upload_rec: UploadRec) -> Result<(), BinRepoError> {
+	async fn upload_to_s3(&self, s3_info: &S3Info, upload_rec: UploadRec) -> Result<(), Error> {
 		let bin_name = &self.bin_name;
 
 		let UploadRec {
@@ -179,30 +180,22 @@ impl BinRepo {
 			at_path,
 		} = upload_rec;
 
-		let S3Info {
-			base,
-			profile,
-			bucket: bucket_name,
-			..
-		} = s3_info;
-
-		//// Create the bucket client
-		let bucket = build_new_aws_bucket_client(bucket_name, profile).await?;
-
 		let is_at_path = at_path.is_some();
 		let path_or_stream = at_path.unwrap_or(stream);
-		let origin_target_key = format!("{}/{}", base, self.origin_bin_target_uri(&path_or_stream));
+		let origin_target_key = self.origin_bin_target_uri(&path_or_stream);
+
+		//// Create the bucket client
+		// let bucket = build_new_aws_bucket_client(bucket_name, profile).await?;
+
+		let bucket = new_repo_bucket(s3_info.profile.clone()).await?;
 
 		//// Upload latest.toml
 		if !is_at_path {
 			let latest_key = clean_path(format!("{}/latest.toml", origin_target_key));
-			let mut latest_toml = File::open(&latest_toml)?;
-			let mut buffer = String::new();
-			latest_toml.read_to_string(&mut buffer)?;
-			bucket
-				.put_object_with_content_type(&latest_key, buffer.as_bytes(), "text/plain")
-				.await?;
-			println!("  uploaded: s3:://{}/{}", bucket_name, latest_key);
+			let content = read_to_string(latest_toml)?;
+
+			let s3_url = bucket.upload_text(s3_info, &latest_key, content, None).await?;
+			println!("  uploaded: {s3_url}");
 		}
 
 		//// build the package key
@@ -215,21 +208,14 @@ impl BinRepo {
 		//// Upload the package gz
 		let gz_key = clean_path(format!("{}/{}.tar.gz", package_key, bin_name));
 		// TODO: need to stream content
-		let mut gz_file = File::open(&gz_file_path)?;
-		let mut buffer = Vec::new();
-		gz_file.read_to_end(&mut buffer)?;
-		bucket.put_object(&gz_key, &buffer).await?;
-		println!("  uploaded: s3:://{}/{}", bucket_name, gz_key);
+		let url = bucket.upload_file(s3_info, &gz_key, &gz_file_path).await?;
+		println!("  uploaded: {url}");
 
 		//// Upload the package toml
 		let package_key = clean_path(format!("{}/{}.toml", package_key, bin_name));
-		let mut package_toml = File::open(&package_toml_path)?;
-		let mut buffer = String::new();
-		package_toml.read_to_string(&mut buffer)?;
-		bucket
-			.put_object_with_content_type(&package_key, buffer.as_bytes(), "text/plain")
-			.await?;
-		println!("  uploaded: s3:://{}/{}", bucket_name, package_key);
+		let content = read_to_string(package_toml_path)?;
+		let url = bucket.upload_text(s3_info, &package_key, content, None).await?;
+		println!("  uploaded: {url}");
 
 		Ok(())
 	}

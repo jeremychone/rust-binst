@@ -17,9 +17,9 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 tokio = {version = "1", features = ["full"]}
+tokio-stream = "0.1"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"]}
-anyhow = "1.0"
-rust-s3 = {version = "0.28", default-features = false, features = ["tokio-rustls-tls"]}
+mime_guess = "2"
 platform-info = "1"
 dirs = "4.0"
 clap =  {version = "4", features = ["cargo"]}
@@ -29,4 +29,8 @@ tar = "0.4"
 libflate = "1"
 regex = "1"
 semver = "1.0"
-url = "2"
+# Aws libs
+aws-sdk-s3 = "0.22"
+aws-config = "0.52"
+aws-types = "0.52"
+aws-smithy-http = "0.52"

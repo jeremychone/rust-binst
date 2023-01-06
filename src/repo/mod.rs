@@ -8,21 +8,21 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use self::error::BinRepoError;
-
-mod aws_provider;
-pub mod error;
+// mod aws_provider;
+mod error;
 mod install;
 mod publish;
+mod s3w;
 
+// --- re-exports
+pub type Result<T> = core::result::Result<T, error::Error>;
+pub use error::Error;
+
+// --- Consts
 pub const BINST_REPO_URL: &str = "https://repo.binst.io/";
 pub const BINST_REPO_BUCKET: &str = "binst-repo";
 pub const BINST_REPO_AWS_PROFILE: &str = "binst-repo-user";
-// env names for the binst repo
-pub const ENV_BINST_REPO_AWS_KEY_ID: &str = "BINST_REPO_AWS_KEY_ID";
-pub const ENV_BINST_REPO_AWS_KEY_SECRET: &str = "BINST_REPO_AWS_KEY_SECRET";
-pub const ENV_BINST_REPO_AWS_REGION: &str = "BINST_REPO_AWS_REGION";
-
+// main stream
 pub const MAIN_STREAM: &str = "main";
 
 #[derive(Debug)]
@@ -61,7 +61,7 @@ impl RepoInfo {
 		RepoInfo::Http(clean_path(BINST_REPO_URL))
 	}
 
-	fn from_repo_string(repo: &str, profile: Option<&str>) -> Result<RepoInfo, BinRepoError> {
+	fn from_repo_string(repo: &str, profile: Option<&str>) -> Result<RepoInfo> {
 		let repo_info = if repo.starts_with("s3://") {
 			RepoInfo::S3(S3Info::from_s3_url(repo, profile)?)
 		} else if repo.starts_with("http://") || repo.starts_with("https://") {
@@ -83,24 +83,24 @@ pub struct S3Info {
 }
 
 impl S3Info {
-	pub fn from_s3_url(s3_url: &str, profile: Option<&str>) -> Result<S3Info, BinRepoError> {
+	pub fn from_s3_url(s3_url: &str, profile: Option<&str>) -> Result<S3Info> {
 		let repo_path = &s3_url[5..];
 		let mut parts = repo_path.splitn(2, '/');
 		let bucket = match parts.next() {
 			Some(bucket) => {
 				if bucket.is_empty() {
-					return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned()));
+					return Err(Error::RepoInvalidS3(s3_url.to_owned()));
 				}
 				bucket
 			}
-			None => return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned())),
+			None => return Err(Error::RepoInvalidS3(s3_url.to_owned())),
 		}
 		.to_owned();
 
 		let base = match parts.next() {
 			Some(base) => {
 				if base.starts_with('/') {
-					return Err(BinRepoError::RepoInvalidS3(s3_url.to_owned()));
+					return Err(Error::RepoInvalidS3(s3_url.to_owned()));
 				}
 				base
 			}
@@ -130,7 +130,7 @@ pub struct BinRepo {
 
 // repo builder function(s) and common methods
 impl BinRepo {
-	pub fn new(bin_name: &str, argc: &ArgMatches, publish: bool) -> Result<Self, BinRepoError> {
+	pub fn new(bin_name: &str, argc: &ArgMatches, publish: bool) -> Result<Self> {
 		let bin_name = bin_name.to_string();
 
 		let target = if publish {
@@ -165,14 +165,14 @@ impl BinRepo {
 }
 
 // region:    BinRepo path function helpers
-fn make_bin_temp_dir(bin_name: &str) -> Result<PathBuf, BinRepoError> {
+fn make_bin_temp_dir(bin_name: &str) -> Result<PathBuf> {
 	let start = SystemTime::now().duration_since(UNIX_EPOCH).expect("time anomaly?").as_millis();
 
 	let path = binst_tmp_dir(Some(&format!("{}-{}", bin_name, start)))?;
 	Ok(path)
 }
 
-fn get_release_bin(name: &str, target: &Option<String>) -> Result<PathBuf, BinRepoError> {
+fn get_release_bin(name: &str, target: &Option<String>) -> Result<PathBuf> {
 	// Note this is to support cross compilation (x86_64-apple-darwin on arm64)
 	let bin_file = if let Some(target) = target {
 		Path::new("./target").join(target).join("release").join(name)
@@ -182,7 +182,7 @@ fn get_release_bin(name: &str, target: &Option<String>) -> Result<PathBuf, BinRe
 
 	match bin_file.is_file() {
 		true => Ok(bin_file),
-		false => Err(BinRepoError::NoReleaseBinFile),
+		false => Err(Error::NoReleaseBinFile),
 	}
 }
 
@@ -208,7 +208,7 @@ pub fn get_version_part(version: &Version) -> String {
 	version.to_string()
 }
 
-pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &Path) -> Result<PathBuf, BinRepoError> {
+pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &Path) -> Result<PathBuf> {
 	// make sure the .binst/bin/ directory exists
 	let bin_dir = binst_bin_dir();
 	if !bin_dir.is_dir() {
@@ -216,7 +216,7 @@ pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &Path) -> Result<PathBuf
 	}
 
 	if !unpacked_bin.is_file() {
-		return Err(BinRepoError::UnpackedBinFileNotFound(
+		return Err(Error::UnpackedBinFileNotFound(
 			unpacked_bin.to_string_lossy().to_string(),
 		));
 	}
@@ -228,12 +228,7 @@ pub fn create_bin_symlink(bin_name: &str, unpacked_bin: &Path) -> Result<PathBuf
 	Ok(bin_symlink_path)
 }
 
-pub fn create_install_toml(
-	package_dir: &Path,
-	repo: &str,
-	stream: &str,
-	version: &Version,
-) -> Result<(), BinRepoError> {
+pub fn create_install_toml(package_dir: &Path, repo: &str, stream: &str, version: &Version) -> Result<()> {
 	let install_content = create_install_toml_content(repo, stream, version);
 	let install_path = package_dir.join("install.toml");
 	File::create(install_path)?.write_all(install_content.as_bytes())?;

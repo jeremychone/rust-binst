@@ -2,8 +2,7 @@
 // Utilities for Aws S3 resources
 
 use super::{
-	BinRepoError, BINST_REPO_BUCKET, ENV_BINST_REPO_AWS_KEY_ID, ENV_BINST_REPO_AWS_KEY_SECRET,
-	ENV_BINST_REPO_AWS_REGION,
+	Error, BINST_REPO_BUCKET, ENV_BINST_REPO_AWS_KEY_ID, ENV_BINST_REPO_AWS_KEY_SECRET, ENV_BINST_REPO_AWS_REGION,
 };
 use dirs::home_dir;
 use regex::Regex;
@@ -25,7 +24,7 @@ struct AwsCred {
 	region: String,
 }
 
-pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<String>) -> Result<Bucket, BinRepoError> {
+pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<String>) -> Result<Bucket, Error> {
 	let mut aws_cred = if bucket_name == BINST_REPO_BUCKET {
 		extract_aws_cred_from_env(
 			ENV_BINST_REPO_AWS_KEY_ID,
@@ -46,7 +45,7 @@ pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<Str
 
 	let aws_cred = match aws_cred {
 		Some(aws_cred) => aws_cred,
-		None => return Err(BinRepoError::S3CredMissingInEnvOrProfile),
+		None => return Err(Error::S3CredMissingInEnvOrProfile),
 	};
 
 	let credentials = Credentials::new(Some(&aws_cred.id), Some(&aws_cred.secret), None, None, None).unwrap();
@@ -60,7 +59,7 @@ pub async fn build_new_aws_bucket_client(bucket_name: &str, profile: &Option<Str
 			Some(profile) => format!("with profile {}", profile),
 			None => "from environment variables".to_owned(),
 		};
-		return Err(BinRepoError::RepoS3BucketNotAccessible(bucket_name.to_owned(), info));
+		return Err(Error::RepoS3BucketNotAccessible(bucket_name.to_owned(), info));
 	};
 
 	Ok(bucket)
@@ -81,14 +80,14 @@ fn extract_aws_cred_from_env(aws_key_id: &str, aws_key_secret: &str, aws_region:
 	}
 }
 
-fn extract_aws_cred_from_profile(profile: &str) -> Result<AwsCred, BinRepoError> {
+fn extract_aws_cred_from_profile(profile: &str) -> Result<AwsCred, Error> {
 	let region = extract_region_from_aws_config(profile)?;
 	let id_secret = extract_id_secret_from_aws_config(profile)?;
 
 	if let (Some(region), Some((id, secret))) = (region, id_secret) {
 		Ok(AwsCred { region, id, secret })
 	} else {
-		Err(BinRepoError::S3CredMissingProfile(profile.to_owned()))
+		Err(Error::S3CredMissingProfile(profile.to_owned()))
 	}
 }
 

@@ -7,9 +7,9 @@ use thiserror::Error;
 use toml::Value;
 
 #[derive(Error, Debug)]
-pub enum UtilsError {
+pub enum Error {
 	#[error("Fail to execute {0} cause: {1}")]
-	ExecError(String, String),
+	Exec(String, String),
 
 	#[error("The toml value not found path {0}")]
 	TomlValueNotFound(String),
@@ -18,36 +18,36 @@ pub enum UtilsError {
 	DirNotSafeToDelete(String),
 
 	#[error(transparent)]
-	IOError(#[from] std::io::Error),
+	IO(#[from] std::io::Error),
 }
 
-impl UtilsError {
+impl Error {
 	fn from_exec_stderr(cmd: &str, args: &[&str], cause: &dyn std::error::Error) -> Self {
 		let command = format!("{} {}", cmd, args.join(" "));
-		UtilsError::ExecError(command, cause.to_string())
+		Error::Exec(command, cause.to_string())
 	}
 	fn from_exec_status(cmd: &str, args: &[&str], status: ExitStatus) -> Self {
 		let command = format!("{} {}", cmd, args.join(" "));
-		UtilsError::ExecError(command, status.to_string())
+		Error::Exec(command, status.to_string())
 	}
 }
 
-pub fn get_toml_value<'v>(root: &'v Value, arr: &[&str]) -> Result<&'v Value, UtilsError> {
+pub fn get_toml_value<'v>(root: &'v Value, arr: &[&str]) -> Result<&'v Value, Error> {
 	let mut value: &Value = root;
 	for name in arr {
 		value = match value.get(name) {
 			Some(v) => v,
-			None => return Err(UtilsError::TomlValueNotFound(arr.join("."))),
+			None => return Err(Error::TomlValueNotFound(arr.join("."))),
 		}
 	}
 	Ok(value)
 }
 
-pub fn get_toml_value_as_string(root: &Value, arr: &[&str]) -> Result<String, UtilsError> {
+pub fn get_toml_value_as_string(root: &Value, arr: &[&str]) -> Result<String, Error> {
 	let value = get_toml_value(root, arr)?;
 	match value.as_str() {
 		Some(str) => Ok(str.to_owned()),
-		None => Err(UtilsError::TomlValueNotFound(arr.join("."))),
+		None => Err(Error::TomlValueNotFound(arr.join("."))),
 	}
 }
 
@@ -57,10 +57,10 @@ pub fn sym_link(original: &Path, link: &Path) -> Result<(), std::io::Error> {
 }
 
 // some small but still additional precaution when deleting directory
-pub fn safer_remove_dir(dir: &Path) -> Result<(), UtilsError> {
+pub fn safer_remove_dir(dir: &Path) -> Result<(), Error> {
 	let path_str = dir.to_string_lossy(); // good enough for contains below
 	if !path_str.contains("binst") {
-		return Err(UtilsError::DirNotSafeToDelete(path_str.to_string()));
+		return Err(Error::DirNotSafeToDelete(path_str.to_string()));
 	}
 
 	remove_dir_all(dir)?;
@@ -77,7 +77,7 @@ pub fn clean_path(uri: impl AsRef<str>) -> String {
 	uri.as_ref().splitn(2, "://").map(cleaner).collect::<Vec<String>>().join("://")
 }
 
-pub fn exec_cmd_args(cmd: &str, args: &[&str]) -> Result<(), UtilsError> {
+pub fn exec_cmd_args(cmd: &str, args: &[&str]) -> Result<(), Error> {
 	let mut proc = Command::new(cmd);
 	proc.args(args);
 
@@ -86,12 +86,12 @@ pub fn exec_cmd_args(cmd: &str, args: &[&str]) -> Result<(), UtilsError> {
 	match proc.spawn()?.wait() {
 		Ok(status) => {
 			if !status.success() {
-				Err(UtilsError::from_exec_status(cmd, args, status))
+				Err(Error::from_exec_status(cmd, args, status))
 			} else {
 				Ok(())
 			}
 		}
-		Err(ex) => Err(UtilsError::from_exec_stderr(cmd, args, &ex)),
+		Err(ex) => Err(Error::from_exec_stderr(cmd, args, &ex)),
 	}
 }
 
