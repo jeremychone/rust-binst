@@ -100,8 +100,7 @@ impl BinRepo {
 			RepoInfo::S3(s3_info) => {
 				let bucket = new_repo_bucket(s3_info.profile.clone()).await?;
 				let key = format!("{base_target_uri}/{LATEST_TOML}");
-				let data = bucket.download_to_string(s3_info, &key).await?;
-				data
+				bucket.download_to_string(s3_info, &key).await?
 			}
 			RepoInfo::Http(base_url) => {
 				get_origin_latest_toml_content_from_base_url(base_url, &base_target_uri).await?

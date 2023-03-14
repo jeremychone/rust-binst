@@ -4,8 +4,7 @@ use crate::repo::{Error, Result};
 use aws_config::profile::profile_file::ProfileFiles;
 use aws_config::profile::Profile;
 use aws_sdk_s3::config::Builder;
-use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
-use aws_types::credentials::SharedCredentialsProvider;
+use aws_sdk_s3::{Client, Credentials, Region};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::env;
 
@@ -51,13 +50,11 @@ pub async fn new_aws_client(profile_str: Option<String>) -> Result<Client> {
 	};
 
 	let cred = Credentials::new(key_id, key_secret, None, None, "loaded-from-config-or-env");
-	let mut builder = Builder::new().credentials_provider(SharedCredentialsProvider::new(cred));
+	let mut builder = Builder::new().credentials_provider(cred);
 
 	if let Some(endpoint) = endpoint {
-		builder = builder
-			.endpoint_resolver(Endpoint::immutable(&endpoint).map_err(|_| Error::InvalidEndPoint(endpoint.clone()))?);
 		// WORKAROUND - Right now the aws-sdk throw a NoRegion on .send if not region even if we have a endpoint
-		builder = builder.region(Region::new("endpoint-region"));
+		builder = builder.endpoint_url(endpoint).region(Region::new("endpoint-region"));
 	}
 
 	if let Some(region) = region {
@@ -112,7 +109,7 @@ impl CredEnv {
 
 async fn aws_cred_from_aws_profile_configs(profile_str: &str) -> Result<Option<AwsCred>> {
 	let (fs, ev) = (Fs::real(), Env::default());
-	let profiles = aws_config::profile::load(&fs, &ev, &ProfileFiles::default()).await;
+	let profiles = aws_config::profile::load(&fs, &ev, &ProfileFiles::default(), None).await;
 
 	if let Ok(profiles) = profiles {
 		if let Some(profile) = profiles.get_profile(profile_str) {
