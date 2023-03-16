@@ -1,8 +1,9 @@
 use super::s3w::new_repo_bucket;
-use super::Result;
-use super::{BinRepo, Error, RepoInfo, S3Info};
+use super::{BinRepo, RepoInfo, S3Info};
 use crate::paths::binst_package_bin_dir;
+use crate::repo::s3w::get_full_key_and_s3_url;
 use crate::repo::{create_bin_symlink, create_install_toml, get_version_part, make_bin_temp_dir};
+use crate::repo::{Error, Result};
 use crate::utils::{get_toml_value_as_string, safer_remove_dir};
 use libflate::gzip::Decoder;
 use semver::Version;
@@ -138,13 +139,11 @@ impl BinRepo {
 		tmp_dir: &Path,
 		stream: &str,
 	) -> Result<(String, Version, PathBuf)> {
-		let http_base = format!("{}/{}", http_base, self.origin_bin_target_uri(stream));
-		// download the info.toml
 		let version = self.get_origin_latest_version(stream).await?;
 
-		// download the gz
-		let gz_name = format!("{}.tar.gz", self.bin_name);
-		let gz_url = format!("{}/{}/{}", http_base, get_version_part(&version), gz_name);
+		let gz_url = self.get_origin_http_url(http_base, stream, &version)?;
+		let gz_name = gz_url.rsplit_once('/').unwrap().1; // We know it must have one.
+
 		let resp = reqwest::get(&gz_url).await?;
 		let gz_tmp_path = tmp_dir.join(gz_name);
 		let mut gz_file = File::create(&gz_tmp_path)?;
@@ -152,6 +151,14 @@ impl BinRepo {
 		std::io::copy(&mut content, &mut gz_file)?;
 
 		Ok((gz_url, version, gz_tmp_path))
+	}
+
+	pub fn get_origin_http_url(&self, http_base: &str, stream: &str, version: &Version) -> Result<String> {
+		let http_base = format!("{}/{}", http_base, self.origin_bin_target_uri(stream));
+		let gz_name = format!("{}.tar.gz", self.bin_name);
+		let gz_url = format!("{}/{}/{}", http_base, get_version_part(version), gz_name);
+
+		Ok(gz_url)
 	}
 }
 
@@ -163,20 +170,37 @@ impl BinRepo {
 		tmp_dir: &Path,
 		stream: &str,
 	) -> Result<(String, Version, PathBuf)> {
-		//// download orignal latest version
+		// -- download orignal latest version
 		let version = self.get_origin_latest_version(stream).await?;
-		// e.g., ...repo/bin_name/target/v0.1.2
-		let origin_version_key = format!("{}/{}", self.origin_bin_target_uri(stream), get_version_part(&version));
 
-		//// download the gz file
-		let gz_name = format!("{}.tar.gz", self.bin_name);
-		let gz_key = format!("{}/{}", origin_version_key, gz_name);
+		let (gz_name, gz_key) = self.get_name_and_key(stream, &version);
+
+		// -- download the gz file
+
 		let gz_tmp_path = tmp_dir.join(gz_name);
 
 		let bucket = new_repo_bucket(s3_info.profile.clone()).await?;
 		let download_url = bucket.download_to_file(s3_info, &gz_key, &gz_tmp_path).await?;
 
 		Ok((download_url, version, gz_tmp_path))
+	}
+
+	pub fn get_origin_s3_url(&self, s3_info: &S3Info, stream: &str, version: &Version) -> Result<String> {
+		let (_, key) = self.get_name_and_key(stream, version);
+
+		let (_key, s3_url) = get_full_key_and_s3_url(s3_info, &key);
+
+		Ok(s3_url)
+	}
+
+	fn get_name_and_key(&self, stream: &str, version: &Version) -> (String, String) {
+		// e.g., ...repo/bin_name/target/v0.1.2
+		let origin_version_key = format!("{}/{}", self.origin_bin_target_uri(stream), get_version_part(version));
+
+		let gz_name = format!("{}.tar.gz", self.bin_name);
+		let gz_key = format!("{}/{}", origin_version_key, gz_name);
+
+		(gz_name, gz_key)
 	}
 }
 
@@ -188,15 +212,24 @@ impl BinRepo {
 		tmp_dir: &Path,
 		stream: &str,
 	) -> Result<(String, Version, PathBuf)> {
-		// base orign path the e.g., ..repo/bin_name/target/stream
-		let base_uri = self.origin_bin_target_uri(stream);
-		let origin_target_dir = Path::new(local_repo_origin).join(base_uri);
-
 		// read the version file
 		let version = self.get_origin_latest_version(stream).await?;
 
+		let origin_gz = self.get_origin_local_path(local_repo_origin, stream, &version)?;
+
+		let tmp_gz = tmp_dir.join(format!("{}.tar.gz", self.bin_name));
+		copy(&origin_gz, &tmp_gz)?;
+
+		let download_path = origin_gz.to_string_lossy().to_string();
+		Ok((download_path, version, tmp_gz))
+	}
+
+	pub fn get_origin_local_path(&self, local_repo_origin: &str, stream: &str, version: &Version) -> Result<PathBuf> {
+		let base_uri = self.origin_bin_target_uri(stream);
+		let origin_target_dir = Path::new(local_repo_origin).join(base_uri);
+
 		// e.g., ...repo/bin_name/target/main/v0.1.2/
-		let origin_dir = origin_target_dir.join(get_version_part(&version));
+		let origin_dir = origin_target_dir.join(get_version_part(version));
 
 		// check origin tar file
 		let origin_gz = origin_dir.join(format!("{}.tar.gz", self.bin_name));
@@ -204,10 +237,6 @@ impl BinRepo {
 			return Err(Error::OriginTarGzNotFound(origin_gz.to_string_lossy().to_string()));
 		}
 
-		let tmp_gz = tmp_dir.join(format!("{}.tar.gz", self.bin_name));
-		copy(&origin_gz, &tmp_gz)?;
-
-		let download_path = origin_gz.to_string_lossy().to_string();
-		Ok((download_path, version, tmp_gz))
+		Ok(origin_gz)
 	}
 }

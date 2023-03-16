@@ -1,10 +1,9 @@
-use std::{fs::create_dir_all, path::PathBuf};
-
+// -- Imports
+use crate::repo::get_version_part;
 use dirs::home_dir;
 use platform_info::{PlatformInfo, Uname};
 use semver::Version;
-
-use crate::repo::get_version_part;
+use std::{fs::create_dir_all, path::PathBuf};
 
 const BINST_DIR: &str = ".binst";
 // const BINST_CFG: &str = "config";

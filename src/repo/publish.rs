@@ -1,6 +1,7 @@
-use crate::exec::CARGO_TOML;
+use crate::cmd::CARGO_TOML;
 use crate::repo::s3w::new_repo_bucket;
-use crate::repo::{extract_stream, get_version_part, RepoInfo, S3Info};
+use crate::repo::{extract_stream, get_release_bin, get_version_part, make_bin_temp_dir, BinRepo, RepoInfo, S3Info};
+use crate::repo::{Error, Result};
 use crate::utils::{clean_path, exec_cmd_args, get_toml_value_as_string, safer_remove_dir};
 use libflate::gzip::Encoder;
 use semver::Version;
@@ -9,8 +10,6 @@ use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 use tar::Builder;
 use toml::Value;
-
-use super::{get_release_bin, make_bin_temp_dir, BinRepo, Error};
 
 #[derive(Debug)]
 struct UploadRec {
@@ -24,7 +23,7 @@ struct UploadRec {
 
 // repo main publish method
 impl BinRepo {
-	pub async fn publish(&self, at_path: Option<String>) -> Result<(), Error> {
+	pub async fn publish(&self, at_path: Option<String>) -> Result<()> {
 		let bin_name = &self.bin_name;
 
 		// create the temp dir
@@ -117,7 +116,7 @@ impl BinRepo {
 
 // upload to local
 impl BinRepo {
-	fn upload_to_local(&self, origin_repo: &str, upload_rec: UploadRec) -> Result<(), Error> {
+	fn upload_to_local(&self, origin_repo: &str, upload_rec: UploadRec) -> Result<()> {
 		let UploadRec {
 			version,
 			latest_toml,
@@ -168,7 +167,7 @@ impl BinRepo {
 
 // upload to s3
 impl BinRepo {
-	async fn upload_to_s3(&self, s3_info: &S3Info, upload_rec: UploadRec) -> Result<(), Error> {
+	async fn upload_to_s3(&self, s3_info: &S3Info, upload_rec: UploadRec) -> Result<()> {
 		let bin_name = &self.bin_name;
 
 		let UploadRec {

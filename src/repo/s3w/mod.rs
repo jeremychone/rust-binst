@@ -26,7 +26,7 @@ pub async fn new_repo_bucket(profile: Option<String>) -> Result<Bucket> {
 impl Bucket {
 	/// Get the key object body as string
 	pub async fn download_to_string(&self, s3_info: &S3Info, key: &str) -> Result<String> {
-		let key = full_key(s3_info, key);
+		let (key, _) = get_full_key_and_s3_url(s3_info, key);
 		let req = self.client.get_object().bucket(s3_info.bucket.clone()).key(key);
 		let res = req.send().await?;
 		let stream = res.body;
@@ -42,7 +42,8 @@ impl Bucket {
 	/// Download a key relative to the bucket/root, to a file_path
 	/// Returns the resolved S3 URL
 	pub async fn download_to_file(&self, s3_info: &S3Info, key: &str, file_path: &Path) -> Result<String> {
-		let key = full_key(s3_info, key);
+		let (key, s3_url) = get_full_key_and_s3_url(s3_info, key);
+
 		let req = self.client.get_object().bucket(s3_info.bucket.clone()).key(&key);
 		let res = req.send().await?;
 		let mut data: ByteStream = res.body;
@@ -55,7 +56,7 @@ impl Bucket {
 		}
 		buf_writer.flush()?;
 
-		Ok(f!("s3://{}/{key}", s3_info.bucket))
+		Ok(s3_url)
 	}
 
 	pub async fn upload_text(
@@ -65,7 +66,7 @@ impl Bucket {
 		content: String,
 		content_type: Option<&str>,
 	) -> Result<String> {
-		let key = full_key(s3_info, key);
+		let (key, s3_url) = get_full_key_and_s3_url(s3_info, key);
 		let content_type = content_type.unwrap_or("text/plain");
 		let body = ByteStream::from(content.into_bytes());
 
@@ -81,11 +82,11 @@ impl Bucket {
 		// EXECUTE - aws request
 		builder.send().await?;
 
-		Ok(f!("s3://{}/{key}", s3_info.bucket))
+		Ok(s3_url)
 	}
 
 	pub async fn upload_file(&self, s3_info: &S3Info, key: &str, file_path: &Path) -> Result<String> {
-		let key = full_key(s3_info, key);
+		let (key, s3_url) = get_full_key_and_s3_url(s3_info, key);
 		let mime_type = mime_guess::from_path(file_path).first_or_octet_stream().to_string();
 		let file_path = PathBuf::from(file_path);
 		let body = ByteStream::from_path(&file_path).await?;
@@ -101,16 +102,16 @@ impl Bucket {
 		// EXECUTE - aws request
 		builder.send().await?;
 
-		Ok(f!("s3://{}/{key}", s3_info.bucket))
+		Ok(s3_url)
 	}
 }
 
-// region:    --- Private Utils
-fn full_key(s3_info: &S3Info, key: &str) -> String {
-	if s3_info.base.is_empty() {
+pub fn get_full_key_and_s3_url(s3_info: &S3Info, key: &str) -> (String, String) {
+	let full_key = if s3_info.base.is_empty() {
 		key.to_string()
 	} else {
 		f!("{}/{key}", s3_info.base)
-	}
+	};
+	let s3_url = f!("s3://{}/{key}", s3_info.bucket);
+	(full_key, s3_url)
 }
-// endregion: --- Private Utils

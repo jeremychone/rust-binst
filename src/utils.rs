@@ -2,11 +2,9 @@ use std::os::unix::fs::symlink;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::{fs::remove_dir_all, path::Path};
-
-use thiserror::Error;
 use toml::Value;
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
 	#[error("Fail to execute {0} cause: {1}")]
 	Exec(String, String),

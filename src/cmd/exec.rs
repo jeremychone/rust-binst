@@ -1,31 +1,44 @@
+use crate::cmd::clap_cmd::clap_cmd;
+use crate::cmd::setup::exec_setup;
+use crate::cmd::{Error, InstalledBinInfo, Result, CARGO_TOML};
 use crate::paths::binst_bin_dir;
-use crate::repo::Error;
 use crate::repo::{BinRepo, MAIN_STREAM};
 use crate::utils::{clean_path, get_toml_value_as_string};
 use clap::ArgMatches;
 use semver::Version;
 use std::fs;
 use std::path::PathBuf;
-use thiserror::Error;
 use toml::Value;
 
-pub mod argc;
-pub mod setup;
+// region:    --- CMD Executor
+pub fn cmd_exec() -> Result<()> {
+	let cmd = clap_cmd().get_matches();
 
-struct InstalledBinInfo {
-	stream: String,
-	version: Version,
-	repo_raw: String,
+	match cmd.subcommand() {
+		Some(("self", _)) => exec_setup()?,
+		Some(("publish", sub_cmd)) => exec_publish(sub_cmd)?,
+		Some(("install", sub_cmd)) => exec_install(sub_cmd)?,
+		Some(("update", sub_cmd)) => exec_update(sub_cmd)?,
+		Some(("info", sub_cmd)) => exec_info(sub_cmd)?,
+		_ => {
+			// needs cmd_app version as the orginal got consumed by get_matches
+			clap_cmd().print_long_help()?;
+			println!("\n");
+		}
+	}
+
+	Ok(())
 }
+// endregion: --- CMD Executor
 
-pub const CARGO_TOML: &str = "Cargo.toml";
+// region:    --- Exec Functions
 
 #[tokio::main]
-pub async fn exec_install(argc: &ArgMatches) -> Result<(), ExecError> {
-	let bin_name = argc.get_one::<String>("bin_name").ok_or(ExecError::NoBinName)?;
-	let bin_repo = BinRepo::new(bin_name, argc, false)?;
+pub async fn exec_install(argm: &ArgMatches) -> Result<()> {
+	let bin_name = argm.get_one::<String>("bin_name").ok_or(Error::NoBinName)?;
+	let bin_repo = BinRepo::new(bin_name, argm, false)?;
 
-	let stream = argc
+	let stream = argm
 		.get_one::<String>("stream")
 		.map(|s| s.to_string())
 		.unwrap_or_else(|| MAIN_STREAM.to_string());
@@ -34,20 +47,20 @@ pub async fn exec_install(argc: &ArgMatches) -> Result<(), ExecError> {
 }
 
 #[tokio::main]
-pub async fn exec_publish(argc: &ArgMatches) -> Result<(), ExecError> {
+pub async fn exec_publish(argm: &ArgMatches) -> Result<()> {
 	let toml = fs::read_to_string(CARGO_TOML)?;
 	let toml: Value = toml::from_str(&toml)?;
 	let bin_name = get_toml_value_as_string(&toml, &["package", "name"])?;
 
-	let bin_repo = BinRepo::new(&bin_name, argc, true)?;
-	let at_path = argc.get_one::<String>("path").map(clean_path);
+	let bin_repo = BinRepo::new(&bin_name, argm, true)?;
+	let at_path = argm.get_one::<String>("path").map(clean_path);
 
 	Ok(bin_repo.publish(at_path).await?)
 }
 
 #[tokio::main]
-pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
-	let bin_name = argc.get_one::<String>("bin_name").ok_or(ExecError::NoBinName)?;
+pub async fn exec_update(argm: &ArgMatches) -> Result<()> {
+	let bin_name = argm.get_one::<String>("bin_name").ok_or(Error::NoBinName)?;
 
 	let InstalledBinInfo {
 		stream,
@@ -55,7 +68,7 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 		version: installed_version,
 	} = extract_installed_bin_info(bin_name)?;
 
-	let repo = BinRepo::new(bin_name, argc, false)?;
+	let repo = BinRepo::new(bin_name, argm, false)?;
 	let origin_toml = repo.get_origin_latest_toml_content(&stream).await?;
 
 	let origin_toml: Value = toml::from_str(&origin_toml)?;
@@ -80,7 +93,31 @@ pub async fn exec_update(argc: &ArgMatches) -> Result<(), ExecError> {
 	Ok(())
 }
 
-fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecError> {
+#[tokio::main]
+pub async fn exec_info(argm: &ArgMatches) -> Result<()> {
+	let stream = MAIN_STREAM;
+
+	let bin_name = argm.get_one::<String>("bin_name").ok_or(Error::NoBinName)?;
+	let bin_repo = BinRepo::new(bin_name, argm, false)?;
+
+	let version = bin_repo.get_origin_latest_version(stream).await?;
+	let url = bin_repo.get_origin_url(stream, &version)?;
+
+	println!(
+		r#"Info for binary: {bin_name}
+ Latest Version: {version}
+     Latest URL: {url}
+	"#,
+	);
+
+	Ok(())
+}
+
+// endregion: --- Exec Functions
+
+// region:    --- Utils
+
+fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo> {
 	let version_dir = get_version_dir_from_symlink(bin_name)?;
 
 	// extract the version from the dir path
@@ -92,9 +129,7 @@ fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecEr
 				Ok(version) => Some(version),
 				Err(_) => None,
 			});
-	let version = version.ok_or(ExecError::NoVersionFromBinPath(
-		version_dir.to_string_lossy().to_string(),
-	))?;
+	let version = version.ok_or(Error::NoVersionFromBinPath(version_dir.to_string_lossy().to_string()))?;
 
 	let install_toml_path = version_dir.join("install.toml");
 	let install_toml = fs::read_to_string(&install_toml_path)?;
@@ -110,7 +145,7 @@ fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecEr
 	let repo_raw = match get_toml_value_as_string(&install_toml, &["install", "repo"]) {
 		Ok(repo) => repo,
 		Err(_) => {
-			return Err(ExecError::NoRepoFoundInArgumentOrInInstallToml(
+			return Err(Error::NoRepoFoundInArgumentOrInInstallToml(
 				install_toml_path.to_string_lossy().to_string(),
 			))
 		}
@@ -123,7 +158,7 @@ fn extract_installed_bin_info(bin_name: &str) -> Result<InstalledBinInfo, ExecEr
 	})
 }
 
-fn get_version_dir_from_symlink(bin_name: &str) -> Result<PathBuf, ExecError> {
+fn get_version_dir_from_symlink(bin_name: &str) -> Result<PathBuf> {
 	let bin_dir = binst_bin_dir();
 	let bin_symlink = bin_dir.join(bin_name);
 	let path = fs::canonicalize(&bin_symlink)?;
@@ -131,38 +166,10 @@ fn get_version_dir_from_symlink(bin_name: &str) -> Result<PathBuf, ExecError> {
 
 	match package {
 		Some(path) => Ok(path.to_path_buf()),
-		None => Err(ExecError::CannotFindBinPackageDir(
+		None => Err(Error::CannotFindBinPackageDir(
 			bin_symlink.to_string_lossy().to_string(),
 		)),
 	}
 }
 
-#[derive(Error, Debug)]
-pub enum ExecError {
-	#[error("Install command must have a binary name in argument")]
-	NoBinName,
-
-	#[error("No repo in argument or in install.toml {0}")]
-	NoRepoFoundInArgumentOrInInstallToml(String),
-
-	#[error("Cannot find package dir for bin {0}")]
-	CannotFindBinPackageDir(String),
-
-	#[error("Version could not be found from bin path {0}")]
-	NoVersionFromBinPath(String),
-
-	#[error(transparent)]
-	BinRepoError(#[from] Error),
-
-	#[error(transparent)]
-	IOError(#[from] std::io::Error),
-
-	#[error(transparent)]
-	TomlError(#[from] toml::de::Error),
-
-	#[error(transparent)]
-	SemVerError(#[from] semver::Error),
-
-	#[error(transparent)]
-	UtilsError(#[from] crate::utils::Error),
-}
+// endregion: --- Utils

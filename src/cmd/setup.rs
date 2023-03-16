@@ -1,7 +1,7 @@
-use crate::exec::argc::version;
+use crate::cmd::clap_cmd::version;
+use crate::cmd::{Error, Result};
 use crate::repo::create_bin_symlink;
 use crate::{paths::*, repo::create_install_toml};
-use crate::{Error, Result};
 use semver::Version;
 use std::fs::{copy, create_dir_all, write};
 
@@ -13,7 +13,7 @@ pub fn exec_setup() -> Result<()> {
 	let bin_name = "binst";
 
 	if !home_dir.is_dir() {
-		return Err(Error::NoHomeDir);
+		Err(Error::NoHomeDir)?;
 	}
 
 	// create the binst as needed

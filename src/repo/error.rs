@@ -2,15 +2,11 @@ use aws_config::retry::ProvideErrorKind;
 use aws_sdk_s3::types::SdkError;
 use aws_smithy_http::result::CreateUnhandledError;
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
 	// region:    --- S3
-	#[error(
-		"Cannot access bucket bucket {0} with credential from {1} 
-   Check you have the right profile in .aws/config and credentials"
-	)]
-	RepoS3BucketNotAccessible(String, String),
-
 	#[error(
 		"AWS crendials not found in environment or profile. 
   Make sure to set the AWS Credential environment variables
@@ -23,12 +19,6 @@ pub enum Error {
 	#[error("AWS Environment variables must have REGION or ENDPOINT (both can't be None)")]
 	S3CredMustHaveRegionOrEndpoint,
 
-	#[error("Profile {0} not found or missing credentials")]
-	S3CredMissingProfile(String),
-
-	#[error("Invalid EndPoint '{0}'")]
-	InvalidEndPoint(String),
-
 	#[error("No environment variable '{0}'")]
 	NoCredentialEnv(String),
 
@@ -38,9 +28,8 @@ pub enum Error {
 	#[error("Credential profile config key {0} not found")]
 	NoCredentialConfig(String),
 
-	#[error("No credentials found for profile {0}.")]
-	NoCredentialsForProfile(String),
-
+	// #[error("No credentials found for profile {0}.")]
+	// NoCredentialsForProfile(String),
 	#[error("Invalid S3 repo url {0}")]
 	RepoInvalidS3(String),
 
@@ -50,9 +39,6 @@ pub enum Error {
 	// endregion: --- S3
 
 	// region:    --- Others
-	#[error("Invalid {0}")]
-	InvalidInfoToml(String),
-
 	#[error("Invalid version from origin latest.toml")]
 	InvalidVersionFromOrigin,
 

@@ -1,5 +1,10 @@
+// -- Re-export
+pub use self::error::{Error, Result};
+pub use repo_info::*;
+
+// -- Imports
 use crate::paths::{binst_bin_dir, binst_tmp_dir, os_target};
-use crate::utils::{clean_path, sym_link};
+use crate::utils::sym_link;
 use clap::ArgMatches;
 use regex::Regex;
 use semver::Version;
@@ -8,15 +13,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-// mod aws_provider;
+// -- Sub-Modules
 mod error;
 mod install;
 mod publish;
+mod repo_info;
 mod s3w;
-
-// --- re-exports
-pub type Result<T> = core::result::Result<T, error::Error>;
-pub use error::Error;
 
 // --- Consts
 pub const BINST_REPO_URL: &str = "https://repo.binst.io/";
@@ -24,55 +26,6 @@ pub const BINST_REPO_BUCKET: &str = "binst-repo";
 pub const BINST_REPO_AWS_PROFILE: &str = "binst-repo-user";
 // main stream
 pub const MAIN_STREAM: &str = "main";
-
-#[derive(Debug)]
-enum RepoInfo {
-	// local path dir
-	Local(String),
-	// S3, only support via profile for now
-	S3(S3Info),
-	// http/https, only for install
-	Http(String),
-}
-
-impl RepoInfo {
-	fn url(&self) -> &str {
-		match self {
-			RepoInfo::Local(url) => url,
-			RepoInfo::S3(s3_info) => &s3_info.url,
-			RepoInfo::Http(url) => url,
-		}
-	}
-}
-
-/// Builders
-impl RepoInfo {
-	fn binst_publish_repo() -> RepoInfo {
-		let s3_info = S3Info {
-			url: format!("s3://{}", BINST_REPO_BUCKET),
-			bucket: BINST_REPO_BUCKET.to_string(),
-			base: "".to_string(),
-			profile: Some(BINST_REPO_AWS_PROFILE.to_string()),
-		};
-		RepoInfo::S3(s3_info)
-	}
-
-	fn binst_install_repo() -> RepoInfo {
-		RepoInfo::Http(clean_path(BINST_REPO_URL))
-	}
-
-	fn from_repo_string(repo: &str, profile: Option<&str>) -> Result<RepoInfo> {
-		let repo_info = if repo.starts_with("s3://") {
-			RepoInfo::S3(S3Info::from_s3_url(repo, profile)?)
-		} else if repo.starts_with("http://") || repo.starts_with("https://") {
-			RepoInfo::Http(clean_path(repo))
-		} else {
-			RepoInfo::Local(clean_path(repo))
-		};
-
-		Ok(repo_info)
-	}
-}
 
 #[derive(Debug)]
 pub struct S3Info {
@@ -122,13 +75,13 @@ impl S3Info {
 
 #[derive(Debug)]
 pub struct BinRepo {
-	bin_name: String,
-	install_repo: RepoInfo,
-	publish_repo: RepoInfo,
-	target: Option<String>,
+	pub bin_name: String,
+	pub install_repo: RepoInfo,
+	pub publish_repo: RepoInfo,
+	pub target: Option<String>,
 }
 
-// repo builder function(s) and common methods
+/// Constructor
 impl BinRepo {
 	pub fn new(bin_name: &str, argc: &ArgMatches, publish: bool) -> Result<Self> {
 		let bin_name = bin_name.to_string();
@@ -157,10 +110,26 @@ impl BinRepo {
 			target,
 		})
 	}
+}
 
-	fn origin_bin_target_uri(&self, stream_or_path: &str) -> String {
+/// Public functions
+impl BinRepo {
+	pub fn origin_bin_target_uri(&self, stream_or_path: &str) -> String {
 		let target = self.target.as_ref().map(|s| s.to_string()).unwrap_or_else(os_target);
 		format!("{}/{}/{}", self.bin_name, target, stream_or_path)
+	}
+
+	pub fn get_origin_url(&self, stream_or_path: &str, version: &Version) -> Result<String> {
+		let url = match &self.install_repo {
+			RepoInfo::Local(local_repo_origin) => self
+				.get_origin_local_path(local_repo_origin, stream_or_path, version)?
+				.to_string_lossy()
+				.to_string(),
+			RepoInfo::S3(s3_info) => self.get_origin_s3_url(s3_info, stream_or_path, version)?,
+			RepoInfo::Http(base_url) => self.get_origin_http_url(base_url, stream_or_path, version)?,
+		};
+
+		Ok(url)
 	}
 }
 

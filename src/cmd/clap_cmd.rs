@@ -4,11 +4,12 @@ pub fn version() -> String {
 	crate_version!()[..].to_owned()
 }
 
-pub fn cmd_app() -> Command {
+pub fn clap_cmd() -> Command {
 	Command::new("binst")
 		.version(crate_version!())
 		.about("Decentralized binary install and deployment")
 		.subcommand(sub_setup())
+		.subcommand(sub_info())
 		.subcommand(sub_publish())
 		.subcommand(sub_install())
 		.subcommand(sub_update())
@@ -17,6 +18,15 @@ pub fn cmd_app() -> Command {
 // region:    Subcommands
 fn sub_setup() -> Command {
 	Command::new("self").about("Self installing binst into ~/.binst/bin/binst")
+}
+
+fn sub_info() -> Command {
+	Command::new("info")
+		.about("Get")
+		.arg(arg_bin_name())
+		.arg(arg_repo())
+		.arg(arg_profile())
+		.arg(arg_target())
 }
 
 fn sub_publish() -> Command {
@@ -32,7 +42,7 @@ fn sub_install() -> Command {
 	Command::new("install")
 		.about("install an binary package from a repo")
 		.arg(arg_repo())
-		.arg(Arg::new("bin_name").required(true).help("Name of the bin package"))
+		.arg(arg_bin_name())
 		.arg(arg_stream())
 		.arg(arg_profile())
 }
@@ -40,13 +50,18 @@ fn sub_install() -> Command {
 fn sub_update() -> Command {
 	Command::new("update")
 		.about("update an already installed library")
+		.arg(arg_bin_name())
 		.arg(arg_repo().required(false)) // turn off require for upteate
-		.arg(Arg::new("bin_name").required(true).help("Name of the bin package"))
 		.arg(arg_profile())
 }
 // endregion: Subcommands
 
 // region:    Common Args
+
+fn arg_bin_name() -> Arg {
+	Arg::new("bin_name").required(true).help("Name of the bin package")
+}
+
 fn arg_repo() -> Arg {
 	Arg::new("repo")
 		.short('r')
